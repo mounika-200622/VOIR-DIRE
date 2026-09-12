@@ -1,77 +1,99 @@
-"""The panel is what a person watches, and it has to show a rule staying silent.
+"""What a person watching needs, which is not what the agent needs.
 
-A screen that only ever renders refusals cannot render a closure being cleared,
-and a clerk who only sees the tool when it says no will believe it says no to
-everything. So every rule gets a seat whether it fires or not.
+The gate answers one question - does anything stop this. A screen that only ever
+shows failures cannot show a change being cleared, and a rule that stayed silent
+is as informative as one that did not.
 """
-import pathlib
-import sys
+import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-
-from voirdire import empanel, learn, panel                            # noqa: E402
-from voirdire.claim import Claim                                       # noqa: E402
-from voirdire.db import Ledger                                         # noqa: E402
-
-import ward as fixture                                                 # noqa: E402
+from voiddire import panel, serve, verbs
+from voiddire.change import Change
+from voiddire.db import Ledger, ledger_path
 
 
 @pytest.fixture
-def w(tmp_path):
-    return fixture.build(tmp_path)
+def repo(tmp_path):
+    r = tmp_path / "proj"
+    (r / "models").mkdir(parents=True)
+    (r / "migrations").mkdir()
+    (r / "models" / "patient.py").write_text('FIELDS = ["id"]\n', encoding="utf-8")
+    (r / "migrations" / "001_init.sql").write_text("-- init\n", encoding="utf-8")
+    for c in (["git", "init", "-q"], ["git", "add", "-A"],
+              ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "s"]):
+        subprocess.run(c, cwd=r, capture_output=True)
+    verbs.rule(r, "models/*.py needs migrations/")
+    return r
 
 
-@pytest.fixture
-def led(tmp_path):
-    led = Ledger(tmp_path / "ledger.db")
-    yield led
+def sit(repo):
+    led = Ledger(ledger_path(repo))
+    out = panel.sit(led, str(repo.resolve()), Change.from_git(repo))
     led.close()
+    return out
 
 
-def test_a_cleared_closure_still_shows_every_rule(w, led):
-    learn.learn_ward(led, w)
-    good = Claim.proposed(
-        w, 11,
-        evidence=[{"type": "photo_after", "file": "x.txt",
-                   "lat": 12.9351, "lon": 77.6241}],
-        closed_at="2026-07-30T10:00:00Z")
-    sitting = panel.sit(led, str(w.resolve()), good)
-    assert not sitting.halted
-    assert sitting.seats, "a cleared closure must still show the rules that cleared it"
-    assert all(s.verdict == panel.CLEAR for s in sitting.seats)
+def test_a_cleared_rule_is_reported_not_omitted(repo):
+    """Silence is a result. A rule that looked and found nothing is evidence."""
+    (repo / "README.md").write_text("hi\n", encoding="utf-8")
+    s = sit(repo)
+    assert s.seats, "the panel must report every rule, including the quiet ones"
+    assert all(x.verdict == panel.CLEAR for x in s.seats)
+    assert not s.halted
 
 
-def test_a_refusal_carries_its_instruction(w, led):
-    learn.learn_ward(led, w)
-    bare = Claim.proposed(w, 11, evidence=[], closed_at="2026-07-30T10:00:00Z")
-    sitting = panel.sit(led, str(w.resolve()), bare)
-    halts = [s for s in sitting.seats if s.verdict == panel.HALT]
-    assert halts, "nothing attached should halt"
-    assert all(s.next for s in halts), "a refusal with no next step is half a tool"
-    assert "3rd Cross" in halts[0].next
+def test_a_firing_rule_carries_its_reason_and_next_step(repo):
+    (repo / "models" / "patient.py").write_text('FIELDS = ["id", "email"]\n', encoding="utf-8")
+    s = sit(repo)
+    assert s.halted
+    halt = [x for x in s.seats if x.verdict == panel.HALT][0]
+    assert halt.domain == "structure"
+    assert "migrations" in halt.reason
+    assert halt.next.startswith("create migrations/")
 
 
-def test_the_panel_names_what_it_looked_at(w, led):
-    learn.learn_ward(led, w)
-    c = Claim.proposed(w, 11, evidence=[], closed_at="2026-07-30T10:00:00Z")
-    sitting = panel.sit(led, str(w.resolve()), c)
-    assert "A-BARE" in sitting.touched and "complaint 11" in sitting.touched
+def test_halts_sort_above_everything_else(repo):
+    (repo / "models" / "patient.py").write_text('FIELDS = ["id", "email"]\n', encoding="utf-8")
+    verdicts = [x.verdict for x in sit(repo).seats]
+    assert verdicts[0] == panel.HALT, verdicts
 
 
-def test_an_untested_rule_is_retried_as_the_record_grows(w, led):
-    """reconsider() has to be able to find the closure a case came from.
+def test_a_broken_rule_is_skipped_and_the_panel_survives(repo):
+    """One bad rule must not take the whole sitting down with it."""
+    led = Ledger(ledger_path(repo))
+    run_id = led.open_run(str(repo.resolve()), "bad", arm="test")
+    led.close_run(run_id, "fail")
+    case = led.file_case(run_id, str(repo.resolve()), "human_reject", "high", "bad rule", [], "{}")
+    led.establish(case, str(repo.resolve()), "must_not_appear",
+                  {"regex": "([unclosed", "glob": "**"}, "a rule that cannot compile",
+                  status="binding", empanel={})
+    out = panel.sit(led, str(repo.resolve()), Change.from_git(repo))
+    led.close()
+    assert any(x.verdict == panel.SKIP for x in out.seats)
+    assert len(out.seats) >= 2, "the other rules still sat"
 
-    It reads the complaint id back out of the case detail. When that broke, it
-    silently promoted nothing, forever, and looked exactly like a project where
-    no advisory rule had ever earned promotion.
-    """
-    learn.learn_ward(led, w)
-    advisory = [h for h in led.holdings(ward=str(w.resolve()))
-                if h["status"] == "persuasive"]
-    for h in advisory:
-        case = led.case(h["case_id"])
-        assert empanel._origin_id(case), "the case must remember its complaint"
-        assert Claim.one(w, empanel._origin_id(case)) is not None
-    assert empanel.reconsider(led, str(w.resolve())) is not None
+
+def test_every_seat_says_which_domain_it_belongs_to(repo):
+    for x in sit(repo).seats:
+        assert x.domain and x.domain != "other", x.template
+
+
+def test_the_event_buffer_is_bounded():
+    """A long session must not grow the server without limit."""
+    serve._events.clear()
+    for i in range(serve._EVENT_CAP + 40):
+        serve.emit("noise", i=i)
+    assert len(serve._events) == serve._EVENT_CAP
+    assert serve._events[-1]["i"] == serve._EVENT_CAP + 39, "newest are kept, oldest dropped"
+
+
+def test_both_paths_emit_the_same_shape(repo):
+    """A page should not care whether a plugin or the watcher noticed."""
+    serve._events.clear()
+    serve.gate_check(str(repo), pending=["models/patient.py"])
+    kinds = [e["kind"] for e in serve._events]
+    assert kinds == ["sitting"]
+    assert {"touched", "halted", "seats", "at"} <= set(serve._events[0])

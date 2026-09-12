@@ -1,36 +1,53 @@
+"""Seeds are fixtures. If a run ever writes into one, every measurement taken
+afterwards is wrong and nothing else in this suite means anything - so this is
+checked first and loudly."""
 import subprocess
-import sys
-import os
+from pathlib import Path
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SEEDS_DIR = os.path.join(BASE_DIR, 'seeds')
+import pytest
 
-def main():
-    if not os.path.exists(SEEDS_DIR):
-        print("FAIL: seeds directory not found.")
-        sys.exit(1)
-        
-    try:
-        # Use Git as the baseline to ensure seeds haven't been edited.
-        output = subprocess.check_output(
-            ['git', 'status', '--porcelain', 'seeds/'],
-            cwd=BASE_DIR,
-            stderr=subprocess.STDOUT
-        ).decode('utf-8').strip()
-        
-        if output:
-            print("FAIL: Seeds have been modified!")
-            for line in output.split('\n'):
-                print(f"  {line}")
-            sys.exit(1)
-        else:
-            print("PASS: Seeds are pristine.")
-    except subprocess.CalledProcessError as e:
-        print(f"FAIL: Git command failed. {e}")
-        sys.exit(1)
-    except FileNotFoundError:
-        print("FAIL: Git executable not found.")
-        sys.exit(1)
+from voiddire.workspace import restore
 
-if __name__ == "__main__":
-    main()
+SEEDS = Path(__file__).resolve().parents[1] / "seeds"
+
+
+def test_no_seed_has_uncommitted_changes():
+    r = subprocess.run(["git", "status", "--porcelain", "--", str(SEEDS)],
+                       capture_output=True, text=True, cwd=SEEDS.parent)
+    dirty = [l for l in r.stdout.splitlines() if l.strip()]
+    assert not dirty, "a seed fixture has been modified:\n  " + "\n  ".join(dirty)
+
+
+def test_the_clinic_seed_still_has_the_trap_in_it():
+    """Without this exact shape, 'a field with no migration' cannot fail."""
+    fields = (SEEDS / "clinic" / "models" / "patient.py").read_text(encoding="utf-8")
+    assert '["id", "name", "phone"]' in fields
+    migrations = sorted(p.name for p in (SEEDS / "clinic" / "migrations").glob("*.sql"))
+    assert migrations == ["001_init.sql"], migrations
+
+
+def test_restore_refuses_to_write_onto_a_seed():
+    with pytest.raises(ValueError, match="refusing to restore onto the seed"):
+        restore(SEEDS / "clinic", SEEDS / "clinic")
+
+
+def test_restore_refuses_to_write_inside_a_seed():
+    with pytest.raises(ValueError, match="refusing to restore onto the seed"):
+        restore(SEEDS / "clinic", SEEDS / "clinic" / "sub" / "dir")
+
+
+TOP_LEVEL = {".gitignore", "CLAUDE.md", "LICENSE", "README.md", "bench", "docs",
+             "install.sh", "plugin", "pyproject.toml", "seeds", "tests", "voiddire",
+             "web"}
+
+
+def test_no_stray_directory_has_been_committed_at_the_repo_root():
+    """A live agent once wrote migrations/ into the repository root and a
+    `git add -A` committed it. Three separate times agent droppings have been
+    swept into a commit, so the expected shape is now asserted rather than
+    remembered."""
+    r = subprocess.run(["git", "ls-tree", "--name-only", "HEAD"],
+                       capture_output=True, text=True, cwd=SEEDS.parent)
+    tracked = {l.strip() for l in r.stdout.splitlines() if l.strip()}
+    unexpected = tracked - TOP_LEVEL
+    assert not unexpected, f"unexpected tracked entries at the repo root: {sorted(unexpected)}"
