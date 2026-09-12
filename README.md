@@ -351,6 +351,73 @@ the generator ran** — so the recorder learned to see commands, and `must_run`
 asks that question, with the rule read out of the file's own words
 (`GENERATED FILE - run tools/gen.py, do not edit by hand`).
 
+### Every shipped check now has a number
+
+Two checks used to ship real and ship unmeasured — `blast_radius` and
+`no_quadratic` had no trap class, so the benchmark could say nothing about them
+either way. They have one now: a fourth seeded repo whose oracle fails for the
+reason the rule predicts, counted rather than timed.
+
+```bash
+python -m voiddire bench --arms A,C --seeds 1,2,3,4,5 --out bench/report.coverage.json
+```
+
+**410 runs, 41 tasks, four repos** (`bench/report.coverage.json`):
+
+| | A — no memory | C — binding gates |
+|---|---|---|
+| first-try pass | 56.1% | **76.1%** |
+| pass on trapped tasks | 41.9% | **68.4%** |
+| fell for the same trap twice | 57.1% | **19.6%** |
+
+| trap class | A | C |
+|---|---|---|
+| changing a model, no migration | 48% | **68%** |
+| changing the API, not the client types | 50% | **75%** |
+| editing a generated file by hand | 40% | **67%** |
+| adding a plugin, not declaring it | 20% | **62%** |
+| **changing a signature, not its callers** | 65% | **75%** |
+| **a lookup per row instead of one query** | 45% | **70%** |
+
+The two new rows are the previously unmeasured checks. Neither is a rewrite of
+an existing rule: `blast_radius` asks *did you finish the job* rather than *did
+the other folder move*, and `no_quadratic` only ever looks at lines this change
+**added**.
+
+Both were also mute until now — they could say what was wrong and not what to
+do. Our own compliance sweep says the instruction is the mechanism, so both now
+name the next action, read out of the verdict itself: the caller list comes
+from the call graph, the location from the finding. Neither is invented.
+
+### This run also costs us our 0.0%
+
+**False positives on control tasks: 0.0% in the 300-run result, 6.0% here.**
+That is worth stating plainly rather than publishing only the flattering one.
+
+All three are the same rule on the same three control tasks —
+`co_change( docs/*.md -> registry.py )`, firing on a task that edits
+`docs/plugins.md` and nothing else. **It is not one of the new checks**, and it
+cannot be: those controls touch no `.py` file at all, so a signature rule and a
+cost rule have nothing to look at.
+
+It is a flaw we had already written down. In this repository's own compiler:
+
+> *So this stays first-match on co-occurrence, and `docs/ -> registry.py` stays
+> a known false positive. The evidence that would refute it is evidence these
+> runs do not produce.*
+
+Every successful registry run touches `docs/` and `registry.py` together, so
+nothing in history ever contradicts the rule — it is a correct inference from
+the evidence available and still wrong about the world. What changed is only
+**when** it gets established: tasks are shuffled per seed, so adding eleven
+tasks moved the rule ahead of the controls it fires on. The 0.0% was ordering
+luck, not the absence of the flaw.
+
+The honest reading is that **0.0% was always the weaker claim**, and a bigger
+corpus found the rule the smaller one stepped over. `mine.py` settles direction
+with an asymmetry test that would reject this rule; the compiler cannot use it,
+because inside one run's short history nothing ever moves alone.
+
 ### It starts level and pulls away
 
 Pass rate over the first ten tasks of a seed, against the last ten:
@@ -452,8 +519,16 @@ The reproduction is `tests/test_empanel.py`. This is the general lesson and it
 cost us a published caveat to learn: **a check that abstains and a check that
 approves look identical from the outside, and only one of them is evidence.**
 
-**5. `blast_radius` and `no_quadratic` are unmeasured.** Both are real checks;
-neither has a trap class in the benchmark, so there is no number for them.
+**5. `blast_radius` over-blocks a backward-compatible change.** Adding a
+parameter *with a default* does not require callers to move, but the `def` line
+changed, so the rule fires anyway. Its own benchmark fixture surfaced this.
+Fixing it means comparing parameter defaults inside a check the published
+numbers were measured on, so it is written down here and in the check's
+docstring rather than slipped in quietly.
+
+**6. The control-task false-positive rate is 0.0% on 300 runs and 6.0% on the
+410-run extended set** — one pre-existing co-change rule, not a new check. The
+reasoning is in [This run also costs us our 0.0%](#this-run-also-costs-us-our-00).
 
 An earlier run was scored under a bytecode-cache bug and is kept as
 `bench/report.prebugfix.json`. A `.pyc` records source mtime to one-second

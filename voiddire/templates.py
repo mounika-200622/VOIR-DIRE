@@ -89,6 +89,14 @@ def blast_radius(ch: Change, p: dict) -> str | None:
     Path-based rules ask whether the other directory moved. This asks the
     semantic question, and it is the one nobody checks: a signature change is
     only finished when its callers are.
+
+    Known limitation, found by its own benchmark fixture and left visible
+    rather than quietly worked around: a parameter added WITH a default is
+    backward compatible, and existing callers do not have to move - but the
+    `def` line still changed, so this fires anyway. It over-blocks that case.
+    Fixing it means parsing the parameter list and comparing defaults, which
+    is a change to a check the published numbers were measured on, so it is
+    written down here instead of slipped in.
     """
     from . import graph
 

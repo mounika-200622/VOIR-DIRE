@@ -56,6 +56,18 @@ def _satisfies(glob: str, companion: dict) -> bool:
     return False
 
 
+def _named_in(text: str, companion: dict) -> bool:
+    """Does the card's own prose name what this companion produces?
+
+    Not every rule states its requirement as a glob. `blast_radius` names the
+    callers it found and `no_quadratic` names the file it read - both in the
+    reason, both derived from the tree rather than written by hand. An agent
+    reading the card would act on those; this is that agent.
+    """
+    low = (text or "").replace("\\", "/").lower()
+    return any(made.rstrip("/").lower() in low for made in companion.get("produces", []) if made)
+
+
 def repair(task: Task, skipped: list[int], verdicts, comply: bool = True) -> list[dict]:
     """Told no, and told which directory. Do that companion, and nothing else."""
     if not comply:
@@ -63,10 +75,19 @@ def repair(task: Task, skipped: list[int], verdicts, comply: bool = True) -> lis
     wanted: list[dict] = []
     for v in verdicts:
         glob = required_of(v)
-        if not glob:
-            continue
+        matched = False
         for i in list(skipped):
-            if _satisfies(glob, task.companions[i]):
+            if glob and _satisfies(glob, task.companions[i]):
+                wanted += task.companions[i]["actions"]
+                skipped.remove(i)
+                matched = True
+        if matched:
+            continue
+        # Fallback only: a rule whose requirement is not a glob still names
+        # paths in its reason. Reached only when the glob matched nothing, so
+        # no existing trap class changes behaviour.
+        for i in list(skipped):
+            if _named_in(getattr(v, "reason", ""), task.companions[i]):
                 wanted += task.companions[i]["actions"]
                 skipped.remove(i)
     return wanted

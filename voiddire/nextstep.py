@@ -83,4 +83,25 @@ def suggest(verdict, repo: Path, touched: list[str]) -> str:
             return f"create {d}/{slug}{ext}"
         return f"add the matching change under {d}/"
 
+    # These two knew what was wrong and said nothing about what to do, which is
+    # the half our own numbers say actually moves an agent. Both instructions
+    # are read back out of the verdict's own reason - the caller list came from
+    # the call graph, the location from the finding - so neither is invented.
+    if template == "blast_radius":
+        reason = getattr(verdict, "reason", "")
+        name = reason.split("(", 1)[0].strip() if "(" in reason else ""
+        who = reason.split("updated:", 1)[1].strip() if "updated:" in reason else ""
+        if who:
+            call = f"{name}()" if name else "the signature you changed"
+            return f"update the callers of {call} that have not moved: {who}"
+        return "update every caller of the signature you changed"
+
+    if template == "no_quadratic":
+        reason = getattr(verdict, "reason", "")
+        where = reason.split(" line ", 1)[0].strip()
+        fix = reason.rsplit(";", 1)[1].strip() if ";" in reason else ""
+        if where and fix:
+            return f"in {where}, {fix}"
+        return "do that work once outside the loop"
+
     return ""

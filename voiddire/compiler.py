@@ -98,6 +98,28 @@ def fallback(case: dict, ch: Change, past: list[Change] | None = None) -> tuple[
             return "must_run", {"glob": path, "cmd": gen}, \
                 f"{path} is generated. Run {gen} instead of editing it."
 
+    # A signature that moved without its callers. This asks the semantic
+    # question rather than the path one - "did you finish the job?" instead of
+    # "did the other folder move?" - so it is checked before the co-occurrence
+    # rules, which would otherwise answer a narrower question first and hide it.
+    #
+    # Deliberately narrow: it proposes nothing unless a name really did change
+    # shape AND real callers really were left behind, both read out of the tree.
+    if templates.fires("blast_radius", {}, ch):
+        return "blast_radius", {}, \
+            "A function that changed shape is not finished until its callers move."
+
+    # A cost regression in the lines this change ADDED. Same restraint: the
+    # finding has to be in new code, so a repository full of existing nested
+    # loops never becomes this change's fault.
+    for path in ch.touched:
+        if not path.endswith(".py"):
+            continue
+        glob = _globify(path)
+        if templates.fires("no_quadratic", {"glob": glob}, ch):
+            return "no_quadratic", {"glob": glob}, \
+                f"Work added under {glob} has to stay linear in its input."
+
     # Correlation is not direction, and this path cannot fix that.
     #
     # mine.pairings settles direction with an asymmetry test, and it works on

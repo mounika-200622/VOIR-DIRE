@@ -134,7 +134,8 @@ def cmd_bench(a) -> int:
         print("obeys prose, and a scripted agent never reads the system prompt. skipping it.")
         arms = tuple(x for x in arms if x != "B")
     rep = bench_main(arms=arms, seeds=seeds, p_recall=a.recall,
-                     live=getattr(a, 'live', False))
+                     live=getattr(a, 'live', False),
+                     out=Path(a.out) if getattr(a, "out", None) else None)
     print()
     print(f"  {rep['runs']} runs, {rep['tasks']} tasks, {len(rep['seeds'])} seeds, "
           f"agent={rep['agent']}, p_recall={rep['p_recall']}")
@@ -190,6 +191,9 @@ def main(argv=None) -> int:
                    help="let the model drive every step instead of a scripted agent")
     b.add_argument("--compliance", action="store_true",
                    help="sweep how much depends on the agent obeying the card")
+    b.add_argument("--out", default=None,
+                   help="where to write the report (default bench/report.json). "
+                        "Use it rather than overwriting a published result.")
     b.set_defaults(fn=cmd_bench)
 
     v = sub.add_parser("serve", help="local HTTP face for a real agent runtime")

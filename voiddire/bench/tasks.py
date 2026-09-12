@@ -185,8 +185,105 @@ def registry_tasks() -> list[Task]:
     return out
 
 
+# ---------- report: a signature moves, and work stays linear ------------------
+#
+# The two checks nothing measured. `blast_radius` and `no_quadratic` shipped
+# real and shipped unmeasured, which meant the benchmark could say nothing
+# about them either way - so they get a fixture whose oracle fails for the
+# reason the rule predicts, not for a reason we arranged separately.
+
+REPORT_STUB = ('"""Reports about who owns what."""\n'
+               "from core.store import Store\n\nstore = Store()\n")
+
+RENDER_HEAD = '"""One row of a report, as a line of text.\n\n'\
+              "Three view modules call this. That is the whole point of the fixture: "\
+              "changing\nthe shape of render() is only finished when its callers move too.\n"\
+              '"""\n\nCOLUMNS = ("id", "name", "total")\n\n\n'
+
+
+def _render_with(param: str, default: str) -> str:
+    return (RENDER_HEAD +
+            f"def render(row, {param}):\n"
+            f'    joiner = " | " if {param} == {default} else str({param})\n'
+            "    return joiner.join(str(row.get(c, \"\")) for c in COLUMNS)\n")
+
+
+def _view(name: str, body: str) -> str:
+    # The views keep their own signatures and pass the new argument through as a
+    # literal. Exactly one function changes shape per task, which is what the
+    # rule is being measured on; widening a view's own signature would make the
+    # oracle a second, quieter caller and muddy what the number means.
+    return (f'"""The {name} view."""\n'
+            "from core.render import render\n\n\n"
+            f"def {name}(rows):\n{body}")
+
+
+def _views_for(param: str, default: str) -> list[dict]:
+    return [
+        {"tool": "write_file", "path": "views/summary.py",
+         "content": _view("summary", f"    return [render(r, {default}) for r in rows]\n")},
+        {"tool": "write_file", "path": "views/detail.py",
+         "content": _view("detail",
+                          f"    return [f\"{{i + 1}}. {{render(r, {default})}}\" "
+                          "for i, r in enumerate(rows)]\n")},
+        {"tool": "write_file", "path": "views/export.py",
+         "content": _view("export",
+                          f'    return "\\n".join(render(r, {default}) for r in rows)\n')},
+    ]
+
+
+def _owner_report(naive: bool) -> str:
+    if naive:
+        body = ("    out = []\n"
+                "    for row in rows:\n"
+                '        out.append(dict(row, owner_name=store.get(row["owner"])))\n'
+                "    return out\n")
+    else:
+        body = ("    owners = store.all()\n"
+                "    out = []\n"
+                "    for row in rows:\n"
+                '        out.append(dict(row, owner_name=owners[row["owner"]]))\n'
+                "    return out\n")
+    return REPORT_STUB + "\n\ndef owner_names(rows):\n" + body
+
+
+def report_tasks() -> list[Task]:
+    out = []
+
+    # a signature change whose callers have to follow
+    shapes = [("fmt", '"text"'), ("sep", '"|"'), ("style", '"plain"'), ("mode", '"wide"')]
+    for param, default in shapes:
+        out.append(Task(
+            id=f"report-render-{param}", repo="report", trap="signature_without_callers",
+            primary=[{"tool": "write_file", "path": "core/render.py",
+                      "content": _render_with(param, default)}],
+            companions=[{"actions": _views_for(param, default), "produces": ["views/"]}],
+        ))
+
+    # work that has to stay linear: one query for the report, not one per row
+    for i in range(4):
+        out.append(Task(
+            id=f"report-owners-{i}", repo="report", trap="lookup_per_row",
+            primary=[{"tool": "write_file", "path": "reports/owners.py",
+                      "content": _owner_report(naive=True)}],
+            companions=[{"actions": [{"tool": "write_file", "path": "reports/owners.py",
+                                      "content": _owner_report(naive=False)}],
+                         "produces": ["reports/"]}],
+        ))
+
+    # controls: nothing to catch, so a rule firing here is a false positive
+    for i, extra in enumerate(["Rows come from the caller.",
+                               "Owners are looked up once.",
+                               "Views share one renderer."]):
+        out.append(Task(
+            id=f"report-readme-{i}", repo="report", trap="",
+            primary=[{"tool": "write_file", "path": "README.md",
+                      "content": f"# report\n\n{extra}\n"}]))
+    return out
+
+
 def all_tasks() -> list[Task]:
-    return clinic_tasks() + typegen_tasks() + registry_tasks()
+    return clinic_tasks() + typegen_tasks() + registry_tasks() + report_tasks()
 
 
 ORACLE = "python oracle.py"
