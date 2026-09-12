@@ -56,22 +56,40 @@ dim        #5E5348   anything receding
 **Motion**
 - `steps(2)` for flicker, `steps(3)` for the stamp arm, `steps(4)` for drawers.
 - One motion budget per screen: exactly one thing has weight. On the Desk it is
-  the stamp landing.
+  the stamp landing; in the Cabinet it is the drawer travelling.
 - `prefers-reduced-motion` removes all of it and loses nothing.
+- **Smoothness is bought with frames, never with interpolation.** When motion
+  reads as choppy the answer is more drawn frames and a shorter interval — the
+  clerk went from 26 frames to 65 and from four states of four frames to ten —
+  not an eased tween inventing the in-betweens. An interpolated curve is what
+  makes pixel art read as a modern UI wearing a costume, which is law 3 above.
+- Durations are whole multiples of one frame (70ms), named in `web/motion.css`
+  as `--t-tick` / `--t-quick` / `--t-beat` / `--t-heavy`.
+
+**Where motion lives.** `web/motion.css` — every page links it, because a
+drawer that opens in four steps on one screen and glides on another is two
+different buildings. It is additive only: no colour, no font, no box, so it
+cannot move a page's furniture. Colours stay per-page (and in `office.css` for
+the front door), since each room is lit differently.
 
 ---
 
 ## 2. The clerk
 
-Five states, each driven by a real event from `/v1/events`.
+Eight states, each driven by a real event from `/v1/events`. Frame counts are
+whatever it takes to read as motion rather than as a flicker-book — the stamp
+gets ten because it is the one thing on the screen with weight.
 
-| State | When | Screen shows | Pose |
-|---|---|---|---|
-| **Dormant** | no service connected | `·` | dim, still |
-| **Watching** | connected, tree unchanged | `---` | idle, slow blink |
-| **Reading** | a `sitting` arrived | rule count, e.g. `19` | leaning, arm raised |
-| **Halt** | any seat `verdict=halt` | holding number, e.g. `No 14` | stamp comes down, screen red |
-| **Cleared** | `recovered` event | `OK` | screen green, papers filed |
+| State | When | Screen shows | Frames | Pose |
+|---|---|---|---|---|
+| **Dormant** | no service connected | `·` | 6 | dim, still, lamp out |
+| **Watching** | connected, tree unchanged | `-` | 10 | one slow breath, scan sweeps, bead blinks |
+| **Reading** | a `sitting` arrived | rule count | 10 | leaning, scan crossing the glass twice |
+| **Halt** | any seat `verdict=halt` | `HALT` | 10 | raise, hold, fall, land, recoil, settle |
+| **Cleared** | `recovered` event | `OK` | 8 | a hop with a real arc, then the card is ticked |
+| **Filing** | after cleared | `FILED` | 8 | the card travels down into the drawer |
+| **Skip** | a seat could not be evaluated | `?` | 5 | a shrug, rather than a pretence |
+| **Overruled** | a holding lost authority | `X` | 8 | struck through, then the card falls |
 
 The clerk is one component with a `state` prop. It appears on the Desk at full
 size and in the header at 24px as a live status indicator on every screen.

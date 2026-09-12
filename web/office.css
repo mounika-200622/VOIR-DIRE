@@ -84,8 +84,7 @@ body{
 }
 
 /* ---- motion ------------------------------------------------------------ */
-/* Stepped only. Smooth easing makes retro read as a modern UI in costume. */
-
-@media (prefers-reduced-motion:reduce){
-  *{ animation:none !important; transition:none !important }
-}
+/* Lives in web/motion.css, which every page links - including this one's.
+ * Keeping it there rather than here is deliberate: office.css also carries
+ * colour and furniture, and most pages define their own, so only the motion
+ * is genuinely shared. See docs/DESIGN.md, "Where motion lives".            */

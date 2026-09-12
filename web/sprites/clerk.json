@@ -3,60 +3,99 @@
     "w": 48,
     "h": 74
   },
-  "count": 26,
+  "count": 65,
   "states": {
     "dormant": [
       0,
-      1
-    ],
-    "watching": [
+      1,
       2,
       3,
       4,
       5
     ],
-    "reading": [
+    "watching": [
       6,
       7,
       8,
-      9
-    ],
-    "halt": [
+      9,
       10,
       11,
       12,
-      13
-    ],
-    "cleared": [
+      13,
       14,
-      15,
-      16,
-      17
+      15
     ],
-    "filing": [
+    "reading": [
+      16,
+      17,
       18,
       19,
-      20
-    ],
-    "skip": [
+      20,
       21,
-      22
-    ],
-    "overruled": [
+      22,
       23,
       24,
       25
+    ],
+    "halt": [
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35
+    ],
+    "cleared": [
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43
+    ],
+    "filing": [
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51
+    ],
+    "skip": [
+      52,
+      53,
+      54,
+      55,
+      56
+    ],
+    "overruled": [
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64
     ]
   },
   "timing": {
-    "dormant": 1400,
-    "watching": 620,
-    "reading": 260,
-    "halt": 110,
-    "cleared": 160,
-    "filing": 200,
-    "skip": 400,
-    "overruled": 320
+    "dormant": 900,
+    "watching": 300,
+    "reading": 110,
+    "halt": 70,
+    "cleared": 110,
+    "filing": 110,
+    "skip": 220,
+    "overruled": 150
   },
   "loop": {
     "dormant": true,

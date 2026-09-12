@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Void Dire — the docket</title>
+<link rel="stylesheet" href="motion.css">
 <style>
   :root{
     --mortar:#E8DCCA; --board:#C9A27A;
@@ -44,6 +45,20 @@
   .opening{position:absolute;overflow:hidden;pointer-events:none}
   .opening .sprite{pointer-events:auto;cursor:pointer}
   .opening .sprite:hover{filter:brightness(1.08)}
+
+  /* A drawer slides. docs/DESIGN.md law 3 puts drawers at steps(4), and this
+     is the one thing on this page carrying weight - the files that come out of
+     it afterwards are deliberately lighter. Four steps over 240ms is close
+     enough to a real drawer's travel that the eye reads mass. */
+  @keyframes drawer-out{
+    from{ transform:translateY(-9px) }
+    to  { transform:none }
+  }
+  .drawer-opening{ animation:drawer-out 240ms steps(4) both }
+  /* The interior is revealed by the front travelling, not by a fade: a drawer
+     whose contents dissolve into view is a drawer made of glass. */
+  @keyframes drawer-reveal{ from{ clip-path:inset(0 0 100% 0) } to{ clip-path:inset(0) } }
+  .opening.revealing{ animation:drawer-reveal 240ms steps(4) both }
 
   /* the label the page writes onto each drawer front */
   .dlabel{position:absolute;pointer-events:none;text-align:center;
@@ -171,6 +186,10 @@ const ROOM = { w: 370, h: 306, floorTop: 264 };
 // drawer is 20 rows of opening with the front thrown forward beneath it,
 // anchored at the same row the closed front sits on.
 const CAB_X = 200, CAB_Y = 60, DRAWER_X = 207, LID = 20;
+// How long the drawer takes to travel. The files inside wait this out before
+// they start coming up, so the two motions read as cause and effect rather
+// than as two things that happened to start together.
+const DRAWER_MS = 240;
 const DRAWERS = [
   { key: "binding",    label: "binding",   y: 76  },
   { key: "persuasive", label: "advisory",  y: 126 },
@@ -295,7 +314,12 @@ function tallyLine(cites){
 // it. Everything navigates by setting it, so the back button works and the
 // halt card on the desk has something it can cite.
 
+// Which drawer, if any, changed on this navigation. Only that one gets pulled
+// open on screen; everything else re-renders in place.
+let JUST_OPENED = null;
+
 function readHash(){
+  const was = open_;
   const [k, id] = location.hash.replace("#", "").split("/");
   open_ = DRAWERS.some(d => d.key === k) ? k : null;
   file_ = null;
@@ -303,6 +327,7 @@ function readHash(){
     const n = Number(id);
     if (rulesIn(open_).some(r => r.id === n)) file_ = n;
   }
+  JUST_OPENED = (open_ && open_ !== was) ? open_ : null;
 }
 function goDrawer(key){ location.hash = open_ === key && !file_ ? "" : "#" + key; }
 function goFile(id){ location.hash = `#${open_}/${id}`; }
@@ -335,8 +360,9 @@ function label(d, isOpen, el){
 function files(d, room){
   const rules = rulesIn(d.key);
   if (!rules.length) return;
+  const fresh = JUST_OPENED === d.key;
   const clip = document.createElement("div");
-  clip.className = "opening";
+  clip.className = "opening" + (fresh ? " revealing" : "");
   clip.style.cssText = `left:${(CAB_X + 7) * PX}px; top:${(d.y - 3) * PX}px;
     width:${118 * PX}px; height:${(LID + 1) * PX}px;`;
 
@@ -350,7 +376,21 @@ function files(d, room){
     const f = put(OFFICE, FILES[i % FILES.length],
                   x0 + i * pitch, lifted ? 0 : 3 + (i % 2));
     f.title = `No ${r.id}`;
+    f.tabIndex = 0;
+    f.setAttribute("role", "link");
     f.onclick = () => goFile(r.id);
+    f.onkeydown = e => {
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); goFile(r.id); }
+    };
+    // The files come up out of the drawer left to right, one per 30ms, after
+    // it has finished travelling - so they read as lifted out of it rather
+    // than as having been sitting there all along. Capped at 12 so a full
+    // drawer does not turn into a slow wave. Only on a fresh pull: clicking a
+    // file inside an open drawer must not re-deal the whole row.
+    if (fresh){
+      f.classList.add("vd-rise");
+      f.style.setProperty("--d", `${DRAWER_MS + Math.min(i, 12) * 30}ms`);
+    }
     clip.appendChild(f);
   });
   room.appendChild(clip);
@@ -378,7 +418,16 @@ function render(){
   if (d){
     const el = put(OFFICE, "cab_open", CAB_X, d.y, "drawer");
     el.onclick = () => goDrawer(d.key);
+    el.tabIndex = 0;
+    el.setAttribute("role", "button");
+    el.onkeydown = e => {
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); goDrawer(d.key); }
+    };
     label(d, true, el);
+    // Only animate a drawer the reader just pulled. Re-rendering for an
+    // unrelated reason - opening a file inside an already-open drawer - must
+    // not slam it shut and haul it out again.
+    if (JUST_OPENED === d.key) el.classList.add("drawer-opening");
     room.appendChild(el);
     files(d, room);       // after the drawer: they stand inside its interior
   }

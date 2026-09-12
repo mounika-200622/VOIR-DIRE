@@ -1,6 +1,7 @@
 <!doctype html>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Void Dire — the desk</title>
+<link rel="stylesheet" href="motion.css">
 <style>
   /* Light, warm, and lit from the upper left. Tokens match
      voiddire/art/clerk.py so the page and the sprites cannot drift. */
@@ -68,9 +69,12 @@
   #halt{position:absolute;display:none;z-index:6;
         background:var(--paper);border:4px solid var(--ink);
         box-shadow:6px 6px 0 rgba(74,56,46,.22);padding:14px 16px}
-  #halt.on{display:block;animation:pinup .18s steps(2) both;cursor:pointer}
+  /* The card is the one thing on this screen with weight (docs/DESIGN.md law 4):
+     it comes down like the stamp it represents, in three steps, and the desk
+     takes the recoil. Everything else on the page stays under 300ms and light. */
+  #halt.on{display:block;animation:vd-stamp var(--t-heavy) steps(3) both;cursor:pointer}
+  #halt.on:hover{transform:translateY(-2px)}
   #halt.on:hover .no{color:var(--ink)}
-  @keyframes pinup{from{transform:translateY(-8px) rotate(-1.5deg)}to{transform:none}}
   /* four pushpins, so it reads as pinned rather than floating */
   #halt::before,#halt::after{content:"";position:absolute;width:12px;height:12px;
     border-radius:50%;background:var(--coral);border:3px solid var(--ink);top:-8px}
@@ -458,6 +462,21 @@ function showLast(){
   if (el && LASTVERDICT) el.classList.add("on");
 }
 
+// The desk flinches when the stamp lands on it. Runs on the stage rather than
+// the card so the whole room moves together, and it is the only shake on the
+// page - a screen where several things jolt reads as a fault, not a decision.
+let joltTimer = null;
+function jolt(after){
+  clearTimeout(joltTimer);
+  joltTimer = setTimeout(() => {
+    const st = document.querySelector(".stage");
+    if (!st) return;
+    st.classList.remove("vd-jolt"); void st.offsetWidth;
+    st.classList.add("vd-jolt");
+    setTimeout(() => st.classList.remove("vd-jolt"), 400);
+  }, after);
+}
+
 function sitting(ev){
   sawAnything = true;
   const seats = ev.seats || [];
@@ -480,9 +499,15 @@ function sitting(ev){
     const nx = document.getElementById("haltnext");
     nx.textContent = v.next ? "do this next: " + v.next : "";
     nx.style.display = v.next ? "" : "none";
-    document.getElementById("halt").classList.add("on");
+    const card = document.getElementById("halt");
+    card.classList.remove("on"); void card.offsetWidth;   // restart on a re-halt
+    card.classList.add("on");
     document.getElementById("lastcard").classList.remove("on");
     clerkState("halt"); lampColour("halt");
+    // The blow lands on frame 7 of the stamp arc, so the desk takes the recoil
+    // then rather than on arrival - the shake reads as caused by the stamp
+    // instead of as a separate effect happening nearby.
+    jolt(Math.round(6.5 * 70));
     say("halt", "halted");
   } else {
     document.getElementById("halt").classList.remove("on");
@@ -508,14 +533,22 @@ function renderSeats(ev, seats, haltCount){
 
   const order = { halt: 0, note: 1, skip: 2, clear: 3 };
   seats.sort((a, b) => order[a.verdict] - order[b.verdict] || a.holding_id - b.holding_id);
-  document.getElementById("seats").innerHTML = seats.map(s => `
-    <div class="seat v-${s.verdict}" title="open holding no ${s.holding_id}"
-         onclick="location.href='cabinet.html#${s.status || "binding"}/${s.holding_id}'">
+  // The panel deals itself out: one row every 35ms, in verdict order, so the
+  // halts land first and the eye follows the list down instead of being handed
+  // a finished block. Four steps each - light, because the card has the weight.
+  document.getElementById("seats").innerHTML = seats.map((s, i) => {
+    const to = `cabinet.html#${s.status || "binding"}/${s.holding_id}`;
+    return `
+    <div class="seat v-${s.verdict} vd-rise" style="--d:${Math.min(i, 14) * 35}ms"
+         tabindex="0" role="link" title="open holding no ${s.holding_id}"
+         onclick="location.href='${to}'"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();location.href='${to}'}">
       <i></i>
       <div class="who">${s.says}
         ${s.reason ? `<div class="why">${s.reason}</div>` : ""}</div>
       <span class="dom">${s.domain}</span>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 }
 
 const OUTCOMES = {

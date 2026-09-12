@@ -369,6 +369,15 @@ ARM_POSES = {
     "mid":    ((35, 31, 40, 42), (37, 43)),
     "up":     ((35, 28, 40, 38), (36, 24)),
     "strike": ((35, 33, 40, 44), (37, 47)),
+
+    # The in-betweens of the stamp arc. Fluidity here comes from frame count,
+    # never from easing - an interpolated tween would make the whole office read
+    # as a modern UI wearing a costume (docs/DESIGN.md, law 3). So the arc is
+    # sampled at six heights instead of three, and every frame is still a frame.
+    "arc":    ((35, 29, 40, 39), (36, 29)),   # just below the raise
+    "lift":   ((35, 30, 40, 40), (36, 34)),   # falling
+    "swing":  ((35, 31, 40, 41), (37, 39)),   # gathering speed
+    "recoil": ((35, 32, 40, 43), (37, 44)),   # the bounce after the blow
 }
 
 
@@ -456,48 +465,96 @@ def draw_impact(cv: Canvas, x: int, y: int):
 #   bead  - the antenna tip
 #   card  - (x, y, mark) an index card in hand
 FRAMES = [
-    # dormant: the tube is cold. Nothing is watching.
+    # dormant: the tube is cold. Nothing is watching. Long, unhurried, and the
+    # only state where the lamp is out - that is what "no service" looks like.
+    ("dormant",  ".",     "s", "down", {"lamp": False}),
     ("dormant",  ".",     "s", "down", {"lamp": False}),
     ("dormant",  "z",     "k", "down", {"lamp": False}),
+    ("dormant",  "z",     "k", "down", {"lamp": False}),
+    ("dormant",  ".",     "s", "down", {"lamp": False, "bob": 1}),
+    ("dormant",  ".",     "s", "down", {"lamp": False}),
 
-    # watching: connected, tree unchanged. A slow breath and a blinking bead.
+    # watching: connected, tree unchanged. One slow breath per cycle, sampled
+    # finely enough to read as breathing rather than as a twitch, with the scan
+    # line sweeping the glass and the bead blinking off the beat.
     ("watching", "-",     "G", "down", {"lamp": True, "bead": True}),
     ("watching", "-",     "G", "down", {"lamp": True, "bob": 1}),
-    ("watching", "- -",   "G", "down", {"lamp": True, "scan": True}),
+    ("watching", "-",     "G", "down", {"lamp": True, "bob": 1, "scan": 10}),
+    ("watching", "- -",   "G", "down", {"lamp": True, "bob": 2, "scan": 13}),
+    ("watching", "- -",   "G", "down", {"lamp": True, "bob": 2, "scan": 16}),
+    ("watching", "- -",   "G", "down", {"lamp": True, "bob": 1, "scan": 19}),
     ("watching", "-",     "G", "down", {"lamp": True, "bob": 1, "bead": True}),
+    ("watching", "-",     "G", "down", {"lamp": True}),
+    ("watching", "-",     "G", "down", {"lamp": True, "bead": True}),
+    ("watching", "-",     "G", "down", {"lamp": True}),
 
-    # reading: a change arrived and the rules are sitting.
+    # reading: a change arrived and the rules are sitting. Quick, busy, and the
+    # scan sweeps the full height of the glass twice per cycle.
+    ("reading",  ".",     "A", "mid",  {"lamp": True, "scan": 10}),
+    ("reading",  "..",    "A", "mid",  {"lamp": True, "scan": 13}),
+    ("reading",  "...",   "A", "mid",  {"lamp": True, "scan": 16}),
+    ("reading",  "...",   "A", "mid",  {"lamp": True, "scan": 19, "bead": True}),
+    ("reading",  "..",    "A", "mid",  {"lamp": True, "scan": 22}),
+    ("reading",  ".",     "A", "mid",  {"lamp": True, "scan": 19}),
+    ("reading",  "..",    "A", "mid",  {"lamp": True, "scan": 16}),
+    ("reading",  "...",   "A", "mid",  {"lamp": True, "scan": 13, "bead": True}),
+    ("reading",  "..",    "A", "mid",  {"lamp": True, "scan": 10}),
     ("reading",  ".",     "A", "mid",  {"lamp": True}),
-    ("reading",  "..",    "A", "mid",  {"lamp": True, "scan": True}),
-    ("reading",  "...",   "A", "mid",  {"lamp": True, "bead": True}),
-    ("reading",  "..",    "A", "mid",  {"lamp": True, "scan": True}),
 
-    # halt: raise, arc, land, hold. It does not loop.
+    # halt: raise, hold, fall, land, bounce, settle. It does not loop - a
+    # verdict holds. This is the one animation on the desk carrying real weight,
+    # so it gets the frames; everything around it stays quiet.
     ("halt",     "HALT", "R", "up",     {"lamp": True, "stamp": True}),
+    ("halt",     "HALT", "R", "up",     {"lamp": True, "stamp": True, "bead": True}),
+    ("halt",     "HALT", "R", "arc",    {"lamp": True, "stamp": True}),
+    ("halt",     "HALT", "R", "lift",   {"lamp": True, "stamp": True}),
+    ("halt",     "HALT", "R", "swing",  {"lamp": True, "stamp": True}),
     ("halt",     "HALT", "R", "mid",    {"lamp": True, "stamp": True}),
     ("halt",     "HALT", "R", "strike", {"lamp": True, "stamp": True, "impact": True,
                                           "bob": -1}),
+    ("halt",     "HALT", "R", "recoil", {"lamp": True, "stamp": True}),
+    ("halt",     "HALT", "R", "strike", {"lamp": True, "stamp": True}),
     ("halt",     "HALT", "R", "strike", {"lamp": True, "stamp": True}),
 
-    # cleared: a small hop, then the card is ticked.
+    # cleared: a hop with a real arc to it, then the card is ticked.
     ("cleared",  "OK",    "G", "down", {"lamp": True}),
+    ("cleared",  "OK",    "G", "down", {"lamp": True, "bob": 1}),
+    ("cleared",  "OK",    "G", "down", {"lamp": True, "bob": 2, "bead": True}),
     ("cleared",  "OK",    "G", "down", {"lamp": True, "bob": 2, "bead": True}),
     ("cleared",  "OK",    "G", "down", {"lamp": True, "bob": 1}),
+    ("cleared",  "OK",    "G", "down", {"lamp": True}),
+    ("cleared",  "OK",    "G", "mid",  {"lamp": True, "card": (33, 44, "tick")}),
     ("cleared",  "OK",    "G", "mid",  {"lamp": True, "card": (33, 44, "tick")}),
 
-    # filing: the citation is recorded. The card goes down into the drawer.
+    # filing: the citation is recorded. The card travels down into the drawer
+    # a few pixels at a time instead of teleporting through it.
     ("filing",   "FILED", "G", "mid",  {"lamp": True, "card": (33, 42, "tick")}),
-    ("filing",   "FILED", "G", "down", {"lamp": True, "card": (32, 50, "tick")}),
-    ("filing",   "FILED", "G", "down", {"lamp": True, "card": (32, 58, None)}),
+    ("filing",   "FILED", "G", "mid",  {"lamp": True, "card": (33, 45, "tick")}),
+    ("filing",   "FILED", "G", "down", {"lamp": True, "card": (32, 49, "tick")}),
+    ("filing",   "FILED", "G", "down", {"lamp": True, "card": (32, 53, "tick")}),
+    ("filing",   "FILED", "G", "down", {"lamp": True, "card": (32, 57, None)}),
+    ("filing",   "FILED", "G", "down", {"lamp": True, "card": (32, 61, None)}),
+    ("filing",   "FILED", "G", "down", {"lamp": True}),
+    ("filing",   "FILED", "G", "down", {"lamp": True}),
 
     # skip: a rule could not be evaluated. It shrugs rather than pretending.
+    ("skip",     "?",     "A", "mid",  {"lamp": True}),
     ("skip",     "?",     "A", "mid",  {"lamp": True, "bob": 1}),
+    ("skip",     "?",     "A", "up",   {"lamp": True, "bob": 1}),
     ("skip",     "?",     "A", "up",   {"lamp": True}),
+    ("skip",     "?",     "A", "mid",  {"lamp": True}),
 
-    # overruled: a precedent lost its authority. The card is struck through.
+    # overruled: a holding lost its authority. The strike lands, then the card
+    # falls out of the drawer rather than blinking out of existence.
+    ("overruled", "X",    "R", "mid",  {"lamp": True, "card": (33, 42, None)}),
     ("overruled", "X",    "R", "mid",  {"lamp": True, "card": (33, 42, None)}),
     ("overruled", "X",    "R", "mid",  {"lamp": True, "card": (33, 42, "cross")}),
+    ("overruled", "X",    "R", "mid",  {"lamp": True, "card": (33, 42, "cross"),
+                                         "bob": -1}),
+    ("overruled", "X",    "R", "mid",  {"lamp": True, "card": (33, 45, "cross")}),
+    ("overruled", "X",    "R", "down", {"lamp": True, "card": (32, 50, "cross")}),
     ("overruled", "X",    "R", "down", {"lamp": True, "card": (32, 56, "cross")}),
+    ("overruled", "X",    "R", "down", {"lamp": True, "card": (32, 62, "cross")}),
 ]
 
 
@@ -513,8 +570,11 @@ def build_frame(spec) -> Canvas:
         draw_stamp(cv, *stamp_pos(pose))
     draw_arm_right(cv, pose)
 
-    if extra.get("scan"):
-        cv.hline(13, 30, 12, "s")
+    scan = extra.get("scan")
+    if scan:
+        # An int sweeps the line down the glass; True keeps the old fixed row.
+        # A CRT that refreshes in one place is a sticker, not a screen.
+        cv.hline(13, 30, 12 if scan is True else int(scan), "s")
     centred(cv, label, 11, colour)
     draw_lamp(cv, extra.get("lamp", True))
     draw_antenna_bead(cv, extra.get("bead", False))
@@ -547,10 +607,13 @@ def sheet() -> tuple[Image.Image, dict]:
         "frame": {"w": W, "h": H},
         "count": len(frames),
         "states": order,
-        # milliseconds per frame, per state. Stepped, never eased.
-        "timing": {"dormant": 1400, "watching": 620, "reading": 260,
-                   "halt": 110, "cleared": 160, "filing": 200,
-                   "skip": 400, "overruled": 320},
+        # Milliseconds per frame, per state. Stepped, never eased - so the way
+        # to make a motion smoother is to shorten the frame and add more of
+        # them, which is what these numbers are. Each state still takes about
+        # as long end to end as it did at a quarter of the frames.
+        "timing": {"dormant": 900, "watching": 300, "reading": 110,
+                   "halt": 70, "cleared": 110, "filing": 110,
+                   "skip": 220, "overruled": 150},
         "loop": {"dormant": True, "watching": True, "reading": True,
                  "halt": False, "cleared": False, "filing": False,
                  "skip": True, "overruled": False},
