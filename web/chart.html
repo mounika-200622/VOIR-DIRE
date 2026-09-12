@@ -116,6 +116,35 @@
         letter-spacing:.11em;text-transform:uppercase;color:var(--wood-deep)}
 
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* ---- the data arrives, the page does not perform ----------------------
+     docs/DESIGN.md law 2 keeps the evidence sober: our strongest asset is that
+     we measured ourselves honestly, and a chart that bounces undercuts it. So
+     only the MARKS animate - bars to their value, the curve left to right -
+     once, stepped, no loop, no easing.
+
+     Everything is readable before any of it runs and after all of it has: the
+     class below is added by script and removed again when the run is over, so
+     the resting state is always the plain one. A frozen tab cannot leave a bar
+     at zero. */
+  @keyframes bar-grow{ from{ transform:scaleX(0) } to{ transform:scaleX(1) } }
+  .drawn .trap .bar > span{ transform-origin:left center;
+    animation:bar-grow 420ms steps(7) both; animation-delay:var(--d,0ms) }
+
+  @keyframes line-draw{ to{ stroke-dashoffset:0 } }
+  .drawn .line{ animation:line-draw 900ms steps(14) both }
+
+  @keyframes mark-in{ from{ opacity:0 } to{ opacity:1 } }
+  .drawn .dot,.drawn .val{ animation:mark-in 1ms steps(1) both;
+    animation-delay:var(--d,0ms) }
+
+  @keyframes zone-in{ from{ opacity:0 } to{ opacity:1 } }
+  .drawn .harm{ animation:zone-in 1ms steps(1) both; animation-delay:620ms }
+
+  @media (prefers-reduced-motion:reduce){
+    .drawn .trap .bar > span,.drawn .line,.drawn .dot,.drawn .val,.drawn .harm{
+      animation:none !important }
+  }
 </style>
 
 <header>
@@ -281,16 +310,52 @@ function headline(r){
   const bt = r.by_trap || {};
   document.getElementById("traps").innerHTML = `<div class="traps">
     <h2>Every trap class moved, and none of them moved backwards.</h2>
-    ${Object.entries(bt).map(([k, v]) => `
+    ${Object.entries(bt).map(([k, v], i) => `
       <div class="trap">
         <span class="nm">${TRAPNAMES[k] || k}</span>
         <span class="bars">
-          <span class="bar a"><span style="width:${v.A * 100}%"></span></span>
-          <span class="bar c"><span style="width:${v.C * 100}%"></span></span>
+          <span class="bar a"><span style="width:${v.A * 100}%; --d:${i * 90}ms"></span></span>
+          <span class="bar c"><span style="width:${v.C * 100}%; --d:${i * 90 + 45}ms"></span></span>
         </span>
         <span class="n">${fmt(v.A)} &rarr; ${fmt(v.C)}</span>
       </div>`).join("")}
   </div>`;
+}
+
+
+// ---- the one animation this page gets ------------------------------------
+// Bars grow to their value, the compliance curve draws left to right, the
+// markers and the harmful zone arrive as it passes them. Once. Then the class
+// comes off and the page is back to plain CSS.
+//
+// Removing it matters more than adding it: an animation that holds its own
+// "from" state forever is one frozen tab away from a chart of empty bars, and
+// this is the page the whole argument rests on. setTimeout fires in a hidden
+// tab even when rAF does not, so the resting state is always reachable.
+function drawIn(){
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  // The curve lives under #main and the trap bars under #result, so the class
+  // goes on the body - scoping it to either one silently animates half the
+  // page, which is exactly what the first attempt did.
+  const root = document.body;
+
+  const line = root.querySelector("path.line");
+  if (line && line.getTotalLength){
+    const len = Math.ceil(line.getTotalLength());
+    line.style.strokeDasharray = len;
+    line.style.strokeDashoffset = len;
+  }
+  // Each marker waits for the curve to reach it.
+  root.querySelectorAll(".dot, .val").forEach((el, i, all) => {
+    const per = Math.max(1, Math.floor(all.length / 2));
+    el.style.setProperty("--d", `${140 + Math.floor(i / 2) * (760 / per)}ms`);
+  });
+
+  root.classList.add("drawn");
+  setTimeout(() => {
+    root.classList.remove("drawn");
+    if (line){ line.style.strokeDasharray = ""; line.style.strokeDashoffset = ""; }
+  }, 1500);
 }
 
 function slips(c, r){
@@ -373,6 +438,8 @@ Promise.all([
   slips(c, r);
   document.getElementById("foot").textContent =
     "source: bench/compliance.json" + (r ? " · bench/report.json" : "");
+  // after everything is in the DOM and measurable
+  requestAnimationFrame(drawIn);
 
   // wall, floor and the pins that hold the paper up
   fetch("sprites/office.json").then(x => x.json()).then(office => {
