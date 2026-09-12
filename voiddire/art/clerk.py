@@ -14,6 +14,7 @@ Every frame below corresponds to a state the system actually produces.
 """
 from __future__ import annotations
 
+import colorsys
 import json
 from pathlib import Path
 
@@ -100,6 +101,72 @@ P = {
 }
 
 
+# ---- derived shades ------------------------------------------------------
+# A shadow is not the same colour turned down. Light that reaches a surface
+# directly is the lamp's, which is yellow-leaning; light that reaches a surface
+# in shadow is bounced and ambient, which is blue-leaning. So a shade rotates
+# hue toward violet and a highlight rotates it toward yellow, and saturation
+# moves the other way in each case - shadows hold their colour, highlights wash
+# out. Doing this by arithmetic rather than by eye keeps every material on the
+# sprite consistent with every other one.
+#
+#   shade      hue -14 deg (warm) / +14 (cool),  sat +10%,  value x0.74
+#   highlight  hue +11 deg (warm) / -11 (cool),  sat -18%,  value x1.09
+#   occlusion  where two forms meet: the shade, halved again
+#
+# Directions flip on cool hues because "toward violet" is a different way round
+# the wheel from orange than it is from green.
+
+def _shift(rgb, dh, ds, dv):
+    r, g, b = (c / 255 for c in rgb[:3])
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    warm = h < 0.18 or h > 0.92          # reds through yellows
+    h = (h + (dh if warm else -dh)) % 1.0
+    s = max(0.0, min(1.0, s * (1 + ds)))
+    v = max(0.0, min(1.0, v * dv))
+    return tuple(round(c * 255) for c in colorsys.hsv_to_rgb(h, s, v)) + (255,)
+
+
+def _ramp(base: str, key: str):
+    """Register shade / highlight / occlusion for a palette entry."""
+    rgb = P[base]
+    P[key + "-"] = _shift(rgb, -14 / 360, +0.10, 0.74)   # shade
+    P[key + "+"] = _shift(rgb, +11 / 360, -0.18, 1.09)   # highlight
+    P[key + "="] = _shift(rgb, -18 / 360, +0.16, 0.55)   # occlusion / contact
+
+
+# The reflection on the tube. A specular is not one step up from the surface -
+# it is the room's light arriving whole, so it gets its own value well above the
+# ramp, while staying dark enough that the record on the screen still reads.
+P["gl2"] = (0x4A, 0x5C, 0x50, 255)
+
+# The room's own materials were hand-picked lighter/darker of one hue, which is
+# what made the office read flat beside a figure that had been shaded properly.
+# Recomputing them puts every surface in the building under the same lamp.
+#
+# A gentler value drop than the figure's: these are surface variants inside a
+# lit room - a brick facing away from the window, a floorboard in its own shadow
+# - not the deep core shadow of a form. P2 and A0 are deliberately NOT in here:
+# they are paper and manila TINTS, and hue-shifting a tint turns paper grey.
+for _b, _d, _lit in (("R2", "R3", 0), ("R2", "R4", 1),      # brick
+                     ("F1", "F2", 0), ("F1", "F3", 1),      # floorboard
+                     ("W1", "W2", 0), ("W1", "W3", 1),      # wood
+                     ("M1", "M2", 0), ("M1", "M3", 1),      # painted metal
+                     ("C", "c", 0),   ("C", "H", 1),        # casing plastic
+                     ("gr", "g2", 0),                       # foliage
+                     ("R", "r", 0)):                        # coral
+    P[_d] = _shift(P[_b], (11 if _lit else -14) / 360,
+                   -0.18 if _lit else 0.10, 1.09 if _lit else 0.80)
+
+for _base, _key in (("W", "sh"),      # shirt
+                    ("T", "tr"),      # trousers
+                    ("B", "lc"),      # leather
+                    ("R", "ti"),      # tie
+                    ("C", "pl"),      # casing plastic
+                    ("S", "gl")):     # screen glass
+    _ramp(_base, _key)
+
+
 class Canvas:
     def __init__(self, w: int = W, h: int = H):
         self.w, self.h = w, h
@@ -139,6 +206,31 @@ class Canvas:
         y += self.oy
         if 0 <= x < self.w and 0 <= y < self.h:
             self.px[y][x] = "_"
+
+    def relight_outline(self):
+        """Selective outlining, applied once to the finished silhouette.
+
+        A single flat outline all the way round is what makes a sprite read as a
+        sticker: the line is telling you where the shape ends and nothing else.
+        A real edge is dark where the form turns away from the lamp and lighter
+        where it turns into it, so the outline carries the lighting too.
+
+        The lamp is upper left, so an outline pixel with empty space above or to
+        its left is a lit edge and softens to `k`. Everything else stays `K`.
+        Only the OUTER silhouette is touched - interior seams are structure, not
+        lighting, and lifting those would dissolve the drawing.
+        """
+        lit = []
+        for y in range(self.h):
+            for x in range(self.w):
+                if self.px[y][x] != "K":
+                    continue
+                up = self.px[y - 1][x] if y > 0 else "_"
+                left = self.px[y][x - 1] if x > 0 else "_"
+                if up == "_" or left == "_":
+                    lit.append((x, y))
+        for x, y in lit:
+            self.px[y][x] = "k"
 
     def box(self, x0, y0, x1, y1, mid, lit=None, dark=None, outline="K"):
         """A shaded solid. Light along the top and left, shadow along the
@@ -281,6 +373,23 @@ def draw_body(cv: Canvas, dim: bool = False):
     cv.frame(11, 5, 32, 22, "K")
     for y in range(7, 21, 2):
         cv.hline(13, 30, y, "s")
+    if not dim:
+        # Glass is the only specular surface on the whole figure, and a CRT
+        # without a reflection in it reads as a painted rectangle. The sweep
+        # sits in the upper left, where the light is, and stops well clear of
+        # row 11 so it never fights the text the screen exists to show.
+        #
+        # It is a diagonal of decreasing length, not a block: a reflection is a
+        # shape the room casts, and three equal rows would be banding.
+        cv.hline(13, 17, 7, "gl2")
+        cv.hline(13, 15, 8, "gl2")
+        cv.set(13, 9, "gl+")
+        # The tube is curved, so the far corners fall away from the lamp. Only
+        # the two AWAY from the light, and only one step down - four dark dots
+        # in four corners read as dirt on the glass rather than as curvature.
+        cv.set(31, 20, "gl-")
+        cv.set(30, 21, "gl-")
+        cv.set(31, 21, "gl=")
 
     # ---- neck: short, thick, and clearly joining two solids ----------------
     cv.rect(20, 26, 28, 31, plastic)
@@ -288,6 +397,10 @@ def draw_body(cv: Canvas, dim: bool = False):
     if not dim:
         cv.vline(21, 27, 30, "H")
         cv.vline(27, 27, 30, dark)
+        cv.vline(28, 27, 30, "pl-")        # rolls away from the light
+        # The casing hangs over the neck and blocks the lamp. This single row is
+        # what stops the head reading as balanced on a post.
+        cv.hline(21, 27, 26, "pl=")
 
     # ---- shoulders and torso ----------------------------------------------
     cv.rect(14, 31, 34, 33, shirt)         # shoulders, narrower than the waist
@@ -296,16 +409,37 @@ def draw_body(cv: Canvas, dim: bool = False):
     cv.rect(13, 33, 35, 47, shirt)         # chest
     cv.frame(13, 33, 35, 47, "K")
     cv.hline(15, 33, 33, shirt)            # dissolve the seam
-    cv.rect(32, 34, 34, 46, shade)         # shadow down the right side
+
+    if not dim:
+        # The torso is a box lit from the upper left, so it gets three values
+        # across, not one - and the bands are different widths on purpose. Two
+        # equal strips running parallel to the edge is banding, which reinforces
+        # the pixel grid and flattens the very form it is meant to build.
+        cv.vline(14, 34, 46, "sh+")        # the lit face
+        cv.vline(15, 34, 40, "sh+")
+        cv.rect(31, 34, 34, 46, "sh-")     # the turn into shadow
+        cv.vline(35, 36, 45, "sh=")        # the far edge rolls away
+        # Contact shadow: the head sits ON the shoulders and occludes them.
+        # Without this the two solids read as stacked rather than joined - but
+        # it belongs UNDER the neck only. Run it the width of the shoulders and
+        # it stops being a shadow and becomes a dirty stripe.
+        cv.hline(20, 28, 31, "sh-")
+    else:
+        cv.rect(32, 34, 34, 46, shade)
 
     cv.hline(19, 22, 32, shade)            # collar
     cv.hline(26, 29, 32, shade)
     cv.set(20, 32, "K")
     cv.set(28, 32, "K")
 
-    if not dim:                            # tie
-        cv.rect(23, 32, 25, 34, "R")
+    if not dim:                            # tie: a cylinder, not a flat strap
+        cv.rect(23, 32, 25, 34, "R")       # knot
+        cv.set(23, 32, "ti+")
+        cv.set(25, 33, "ti-")
         cv.rect(22, 35, 26, 43, "R")
+        cv.vline(22, 36, 42, "ti+")        # lit left edge
+        cv.vline(25, 36, 43, "ti-")        # core shadow
+        cv.vline(26, 37, 42, "ti=")        # the roll away from the light
         cv.set(22, 35, "K")
         cv.set(26, 35, "K")
         cv.hline(23, 25, 44, "K")
@@ -325,23 +459,35 @@ def draw_body(cv: Canvas, dim: bool = False):
     if not dim:
         cv.rect(23, 48, 25, 50, "A")
 
-    # ---- legs, with a gap between them -------------------------------------
-    cv.rect(15, 50, 22, 67, "T")
-    cv.frame(15, 50, 22, 67, "K")
-    cv.rect(26, 50, 33, 67, "T")
-    cv.frame(26, 50, 33, 67, "K")
-    if not dim:
-        cv.vline(18, 52, 66, "t")
-        cv.vline(29, 52, 66, "t")
+    # ---- legs: cylinders, not rectangles -----------------------------------
+    # A tube in light reads as four values across, in this order: a lit edge, the
+    # base, a core shadow, and then a BOUNCE - the far edge picks light back up
+    # off the room and is never the darkest part. Leaving the bounce out is what
+    # makes a cylinder look like a flat plank with a line down it, which is
+    # exactly what these legs were.
+    for x0 in (15, 26):
+        cv.rect(x0, 50, x0 + 7, 67, "T")
+        cv.frame(x0, 50, x0 + 7, 67, "K")
+        if dim:
+            continue
+        cv.vline(x0 + 1, 51, 66, "tr+")    # the lit edge
+        cv.vline(x0 + 4, 51, 66, "t")      # core shadow, off-centre
+        cv.vline(x0 + 5, 51, 66, "tr-")
+        cv.vline(x0 + 6, 52, 65, "tr+")    # bounce light off the floor
+        # The belt overhangs the trousers, so the top of each leg is occluded.
+        cv.hline(x0 + 1, x0 + 6, 51, "tr=")
 
     # ---- shoes: wider than the leg, so they read as feet -------------------
-    cv.rect(12, 67, 23, 71, "B")
-    cv.frame(12, 67, 23, 71, "K")
-    cv.rect(25, 67, 36, 71, "B")
-    cv.frame(25, 67, 36, 71, "K")
-    if not dim:
-        cv.hline(13, 22, 68, "k")
-        cv.hline(26, 35, 68, "k")
+    for x0 in (12, 25):
+        cv.rect(x0, 67, x0 + 11, 71, "B")
+        cv.frame(x0, 67, x0 + 11, 71, "K")
+        if dim:
+            continue
+        cv.hline(x0 + 1, x0 + 10, 68, "lc+")   # the polished cap catches light
+        cv.hline(x0 + 1, x0 + 10, 70, "lc-")   # the welt below it
+        # The one place the figure touches the world. Without a contact shadow a
+        # sprite hovers, however well the rest of it is drawn.
+        cv.hline(x0 + 2, x0 + 9, 71, "lc=")
 
 
 def draw_arm_left(cv: Canvas, dim: bool = False):
@@ -593,6 +739,9 @@ def build_frame(spec) -> Canvas:
 
     if "card" in extra:                   # props ride above the bob
         draw_card(cv, *extra["card"])
+    # Last, so it sees the finished silhouette including whatever the arms and
+    # props added to it.
+    cv.relight_outline()
     return cv
 
 

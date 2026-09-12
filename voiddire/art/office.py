@@ -252,6 +252,12 @@ def lamp(cv: Canvas):
         cv.hline(5 + inset, 24 - inset, y, "R")
         cv.set(4 + inset, y, "K")
         cv.set(25 - inset, y, "K")
+    for i, y in enumerate(range(0, 12)):
+        inset = 6 - i // 2
+        # A cone takes light across its width, not down its middle: lit on the
+        # side facing the window, rolling into shadow on the other.
+        cv.vline(5 + inset, y, y, "ti+")
+        cv.hline(23 - inset, 24 - inset, y, "ti-")
     for i, y in enumerate(range(3, 12)):
         w = i // 2
         cv.hline(14 - w, 15 + w, y, "A")
@@ -309,8 +315,9 @@ def mug(cv: Canvas):
 @piece("plant", 30, 44)
 def plant(cv: Canvas):
     """Fuller fronds. A one-pixel stroke reads as wire, not a plant."""
-    cv.box(7, 30, 22, 41, "R", "r", "r")
-    cv.box(5, 26, 24, 31, "R", "r", "r")
+    cv.box(7, 30, 22, 41, "R", "ti+", "ti-")
+    cv.box(5, 26, 24, 31, "R", "ti+", "ti-")
+    cv.vline(22, 32, 40, "ti=")   # the pot rolls away from the light
     cv.rect(8, 29, 21, 30, "W4")
 
     def frond(x, y, h, tone):
@@ -559,10 +566,20 @@ def printer(cv: Canvas):
 
 def sheet() -> tuple[Image.Image, dict]:
     """One row, pieces laid left to right, each padded to the tallest."""
+    # The two surfaces that TILE must keep a flat outline: relighting an edge
+    # that repeats puts a seam every 64 pixels across the whole wall.
+    TILING = {"brick", "floor"}
+
     built = []
     for name, (w, h, fn) in PIECES.items():
         cv = Canvas(w, h)
         fn(cv)
+        # Selective outlining, same rule the figure gets: the line lightens
+        # where the form turns into the lamp, upper and left, and stays dark
+        # where it turns away. One flat outline all round is what makes a piece
+        # of furniture read as a sticker on the wall.
+        if name not in TILING:
+            cv.relight_outline()
         built.append((name, cv))
 
     total_w = sum(cv.w for _, cv in built)
