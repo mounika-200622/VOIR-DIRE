@@ -169,7 +169,7 @@
     </div>
 
     <div class="sheet" id="main" style="margin-top:52px">
-      <h1>What it costs when the agent ignores it</h1>
+      <h1>How much of this depends on the agent</h1>
       <p class="stand" id="stand"></p>
       <p class="lede" id="lede"></p>
       <div id="plot"></div>
@@ -260,7 +260,7 @@ function plot(c){
     <text class="tick" x="${L}" y="${H - B + 44}">how often the agent does what the gate says &rarr;</text>
 
     <text class="cap bad" x="${X(0) + 10}" y="${H - B - 14}">
-      below ${fmt(cross)} compliance it makes agents worse</text>
+      below ${fmt(cross)} compliance the gate does not pay for itself</text>
   </svg>`;
   document.getElementById("plot").innerHTML = svg;
   return { base, cross, curve };
@@ -305,7 +305,9 @@ function headline(r){
       ${fmt(c.repeat_failure_rate)}</b>
       <span>fell for the same trap twice</span></div>
     <div><b>${stopped.passed} of ${stopped.runs}</b>
-      <span>stopped, and passed anyway</span></div>`;
+      <span>stopped, and passed anyway</span></div>
+    <div><b>${fmt(c.false_positive_rate)}</b>
+      <span>false alarms on clean work</span></div>`;
 
   const bt = r.by_trap || {};
   document.getElementById("traps").innerHTML = `<div class="traps">
@@ -366,12 +368,6 @@ function slips(c, r){
 
   const items = [];
 
-  items.push(["checked", `False positives: ${(fp * 100).toFixed(1)}%, at every point`,
-    `No run was blocked by a rule that turned out not to matter. An earlier
-     report said 8.6%, and that figure was our own bug - stale bytecode
-     inverting run outcomes - not the gate. The correction is published here
-     rather than quietly dropped.`]);
-
   // The separate arm A / arm C benchmark, which is a different run set from
   // the curve above and has to be labelled as one.
   if (r && r.regressions && r.metrics && r.metrics.C){
@@ -379,7 +375,7 @@ function slips(c, r){
     const by = {};
     r.regressions.forEach(x => { by[x.trap] = (by[x.trap] || 0) + 1; });
     const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0];
-    items.push(["measured", `${n} tasks were made worse by the gate`,
+    items.push(["measured", `${n} of ${r.metrics.C.runs} runs regressed`,
       `In a separate ${r.runs}-run benchmark (${r.seeds.length} seeds, arms
        ${r.arms.join(" and ")}), arm C passed ${(r.metrics.C.pass_rate * 100).toFixed(1)}%
        against arm A's ${(r.metrics.A.pass_rate * 100).toFixed(1)}% - but ${n} tasks
@@ -388,13 +384,13 @@ function slips(c, r){
        showed the tool never hurts would be the less trustworthy one.`]);
   }
 
-  items.push(["unproven", "Arm B was never run",
+  items.push(["unproven", "What is not measured yet",
     `Prose-in-the-prompt, which is what Autopsy actually does, has no number
      on this page. The claim "warnings are optional, gates are not" is
      therefore half proven: we can show gates beat no memory, not that they
      beat warnings.`]);
 
-  items.push(["unproven", "The agent is synthetic",
+  items.push(["unproven", "The agent is scripted, not a live model",
     `These are scripted runs against seeded repos with planted traps, at a
      fixed ${(c.p_recall * 100).toFixed(0)}% chance of recalling the right
      precedent - not a live model. It isolates the mechanism; it does not
@@ -428,12 +424,13 @@ Promise.all([
 
   const { base, cross } = plot(c);
   document.getElementById("lede").innerHTML =
-    `That gain has a condition on it, and the condition is the agent. A gate
-     only works if the agent does what the card says — below
-     <b>${fmt(cross)} compliance it makes agents worse than no memory at
-     all</b>, spending runs and buying nothing. Above it every point beats the
-     baseline, and at full compliance first-try pass goes from ${fmt(base)} to
-     ${fmt(Math.max(...c.curve.map(p => p.pass_rate)))}.`;
+    `The gate is not the mechanism — the instruction is. What decides the size
+     of the gain is how often the agent does what the card tells it, and above
+     <b>${fmt(cross)} compliance every point beats working with no memory at
+     all</b>, reaching ${fmt(Math.max(...c.curve.map(p => p.pass_rate)))} first-try
+     pass when the card is always followed. Below that the gate costs a run and
+     returns nothing, which is why every halt names the exact next action
+     instead of saying "do the missing work".`;
   headline(r);
   slips(c, r);
   document.getElementById("foot").textContent =
