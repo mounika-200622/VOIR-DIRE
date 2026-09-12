@@ -39,7 +39,12 @@ jobs:
             test -s "web/$f" || { echo "web/$f is missing or empty"; exit 1; }
           done
 
+      # enablement lets the workflow turn Pages on itself. Without it the repo
+      # owner has to flip it in Settings first, and a deploy that needs a
+      # setting nobody documented is a deploy that quietly never happens.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
