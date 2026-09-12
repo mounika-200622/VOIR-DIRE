@@ -153,3 +153,37 @@ These are not hypotheticals. Every one cost hours.
 
 `voir-dire/` (hyphen) can never be a Python package — teammate dashboard code
 lives there. Our package is `voirdire/`.
+
+---
+
+## 9. Where this came from — read it when you are stuck
+
+**https://github.com/santoshcheethiralame-dot/PRECEDENT**
+
+Voir dire is a port. Precedent is the same engine pointed at coding agents: a
+failure a coding agent repeated becomes a deterministic check that refuses the
+next commit that repeats it. `db.py`, `empanel.py`, `gate.py`, `panel.py`,
+`overrule.py` and `recall.py` here are that code with `repo` renamed to `ward`
+and `Change` rebound to `Claim`. Roughly 2,300 lines are shared; the templates,
+the harness and the demo are the only parts that ever knew they were looking at
+source code.
+
+**Go and read it when:**
+
+- you need the reasoning behind something in `voirdire/` core — it was argued
+  out over there first, usually in a commit message;
+- you are building the benchmark (Brief B). Precedent has a finished two-arm
+  harness, an arm A/B/C structure, and a written record of four separate
+  attempts that produced fake results before one produced a real one;
+- you are building the pages (Brief B) — six of them exist there already;
+- you want the honest numbers a result should look like. Precedent's, over 300
+  runs: pass 53.3% → 70.0%, repeat-failure 58.1% → 31.0%, false positives 0.0%,
+  and **9 regressions published alongside 34 wins**;
+- you hit a bug that smells like one of the five in §7. All five have a fix
+  committed there.
+
+Also there: `docs/SCRIPT.md` — every feature explained in plain language, long
+form. If you are writing anything a reviewer will read, start from its tone.
+
+**What not to copy:** the templates (`packs.py`), the harness, and anything
+about opencode. Those are the domain-specific half and none of it transfers.
