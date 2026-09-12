@@ -120,7 +120,7 @@ never chosen by hand. That is what makes a rule arguable with the same records.
 ## 6. Current state (12 Sep 2026)
 
 - Stage 1 is in: ledger, claim, four checks, empanelment, gate, learning,
-  instruction line. `python -m pytest -q` → **14 passed, 3 failed on purpose**.
+  instruction line. `python -m pytest -q` → **18 passed, 3 failed on purpose**.
 - The 3 failures are `tests/test_ward_traps.py`, a **contract for the corpus**.
   `seeds/ward-demo` has the structure but not the traps — every closure carries
   a photo and took 48 hours, so there is nothing to catch. Each failing test
@@ -129,6 +129,14 @@ never chosen by hand. That is what makes a rule arguable with the same records.
   fast, away, dupe). Copy its shape when planting seed traps.
 - Not done: stage 2 (dashboard refuses + split-screen demo), stage 3 (two-arm
   benchmark measuring repeat-complaint rate).
+- `voir-dire/`, `web/`, `bench/` and `plugin/` are empty placeholders. The ward
+  dashboard actually lives inside `seeds/ward-demo/` (`app.py`, `static/`,
+  `store.py`, `oracle.py`) and should be moved out of the corpus — see
+  `docs/BRIEF-A.md` A1.
+
+**Who does what:** `docs/BRIEF-A.md` (the product — seed traps, dashboard,
+demo, ward verb) and `docs/BRIEF-B.md` (the proof — benchmark, pages,
+packaging). Read your own brief in full; both are specific on purpose.
 
 ## 7. Failure modes that already happened — on the previous build
 
