@@ -1,0 +1,47 @@
+# Publish the records office.
+#
+# The site is already static - every page reads a frozen copy of the ledger and
+# the benchmark out of web/, and nothing on it runs Python. So this uploads the
+# directory as it stands rather than building anything, which also means what a
+# visitor sees is exactly what is committed and reviewable.
+#
+# web/demo.html is deliberately left out of the index: the race drives two live
+# apps on their own ports and cannot work on a static host.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The site must not depend on anything running
+        run: |
+          test -f web/index.html
+          for f in data.json report.json compliance.json replay.json; do
+            test -s "web/$f" || { echo "web/$f is missing or empty"; exit 1; }
+          done
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

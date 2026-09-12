@@ -8,9 +8,14 @@ from voiddire.bench.tasks import all_tasks
 
 def test_the_suite_is_what_it_says():
     tasks = all_tasks()
-    assert len(tasks) == 30
-    assert sum(1 for t in tasks if not t.trap) == 7, "controls measure false positives"
-    assert {t.repo for t in tasks} == {"clinic", "typegen", "registry"}
+    assert len(tasks) == 41
+    assert sum(1 for t in tasks if not t.trap) == 10, "controls measure false positives"
+    assert {t.repo for t in tasks} == {"clinic", "typegen", "registry", "report"}
+    # Every shipped check that can be trapped has a trap. Adding a template
+    # without one is how blast_radius and no_quadratic went unmeasured.
+    assert {t.trap for t in tasks if t.trap} == {
+        "schema_without_migration", "handedit_generated", "types_without_regen",
+        "plugin_without_declaration", "signature_without_callers", "lookup_per_row"}
     for t in tasks:
         assert t.primary, t.id
         for c in t.companions:

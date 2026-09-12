@@ -218,13 +218,14 @@ __marimo__/
 .streamlit/secrets.toml
 
 # void dire
+#   web/data.json and web/report.json are NOT ignored: they are the
+#   frozen ledger and benchmark the static site reads, and the site has
+#   to render for someone who only has a browser.
 .voiddire/
 .demo/
-web/data.json
 .bench/
 bench/*.db
 .live/
-web/report.json
 web/sprites/_inspect.png
 node_modules/
 .opencode/
