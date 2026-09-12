@@ -1,0 +1,6 @@
+{
+  "name": "voiddire-plugin",
+  "private": true,
+  "type": "module",
+  "main": "voiddire.ts"
+}
