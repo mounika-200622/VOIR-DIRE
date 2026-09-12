@@ -1,0 +1,86 @@
+"""Turn a verdict into an instruction the agent can actually execute.
+
+A halt that says "do the missing work" is a verdict. A halt that says
+"create migrations/002_phone_verified.sql" is an instruction. Small models act
+on the second and stall on the first - and an agent that stalls after a block
+has been stopped without being improved, which is the whole point missed.
+
+The suggestion is derived from the repository, never invented: the naming
+convention comes from the files already sitting in the required directory.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+def _required_glob(rule: str) -> str:
+    if "->" in rule:
+        return rule.split("->", 1)[1].strip(" )")
+    if "(" in rule and ":" in rule:
+        return rule.split("(", 1)[1].split(":")[0].strip(" )")
+    return ""
+
+
+def _command(rule: str) -> str:
+    if "(" in rule and ":" in rule:
+        return rule.rsplit(":", 1)[1].strip(" )")
+    return ""
+
+
+def _dir_of(glob: str) -> str:
+    return glob.split("*", 1)[0].rstrip("/")
+
+
+def _slug(touched: list[str]) -> str:
+    """Name the work after what the agent actually changed."""
+    for p in touched:
+        stem = Path(p).stem
+        if stem not in ("__init__", "index"):
+            return re.sub(r"[^a-z0-9]+", "_", stem.lower()).strip("_")
+    return "change"
+
+
+def _next_numbered(existing: list[str]) -> str | None:
+    """Follow the convention already in the directory, if there is one."""
+    nums = []
+    width = 3
+    for name in existing:
+        m = re.match(r"^(\d+)[_-]", name)
+        if m:
+            nums.append(int(m.group(1)))
+            width = len(m.group(1))
+    return f"{max(nums) + 1:0{width}d}" if nums else None
+
+
+def suggest(verdict, repo: Path, touched: list[str]) -> str:
+    """One concrete next action, or "" when the repo cannot tell us one."""
+    repo = Path(repo)
+    template = getattr(verdict, "template", "")
+    rule = getattr(verdict, "rule", "")
+
+    if template in ("required_command", "must_run"):
+        cmd = _command(rule)
+        return f"run `{cmd}` and make it pass" if cmd else ""
+
+    if template == "forbidden_edit":
+        return "revert that file and change the source it is generated from instead"
+
+    if template == "co_change":
+        glob = _required_glob(rule)
+        d = _dir_of(glob)
+        if not d:
+            return ""
+        folder = repo / d
+        existing = sorted(p.name for p in folder.glob("*") if p.is_file()) \
+            if folder.is_dir() else []
+        ext = Path(existing[-1]).suffix if existing else ""
+        nxt = _next_numbered(existing)
+        slug = _slug(touched)
+        if nxt:
+            return f"create {d}/{nxt}_{slug}{ext}"
+        if existing:
+            return f"create {d}/{slug}{ext}"
+        return f"add the matching change under {d}/"
+
+    return ""

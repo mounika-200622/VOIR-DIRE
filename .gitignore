@@ -217,6 +217,14 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# voir dire
-.voirdire/
-.demo-ward/
+# void dire
+.voiddire/
+.demo/
+web/data.json
+.bench/
+bench/*.db
+.live/
+web/report.json
+web/sprites/_inspect.png
+node_modules/
+.opencode/
