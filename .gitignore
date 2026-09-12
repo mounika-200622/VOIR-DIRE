@@ -228,3 +228,7 @@ web/report.json
 web/sprites/_inspect.png
 node_modules/
 .opencode/
+
+# editor droppings
+.vs/
+.idea/
