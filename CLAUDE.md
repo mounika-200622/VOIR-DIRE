@@ -164,9 +164,12 @@ it without running anything.
 
 **Not proven, stated here rather than found by someone else:** the benchmark
 agent is synthetic; arm B (prose-only) has not been run against a real model;
-nine tasks regressed; `blast_radius` and `no_quadratic` have no trap class in
-the benchmark. See `README.md`'s "What is not proven" section — do not quietly
-drop it because a demo is soon.
+nine tasks regressed; `blast_radius` over-blocks a parameter added *with a
+default*, which its own fixture caught; and the control false-positive rate is
+0.0% across the 300-run suite but 6.0% across the 410-run one — a pre-existing
+`co_change( docs/*.md -> registry.py )` rule, not either new check. See
+`README.md`'s "What is not proven" section — do not quietly drop any of it
+because a demo is soon.
 
 ## 7. Failure modes that already happened
 

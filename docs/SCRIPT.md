@@ -222,7 +222,7 @@ elsewhere. Taken from our sibling project rather than rebuilt. If it isn't
 installed, they **abstain** — a check that fires because a dependency is missing
 fires on everything.
 
-### Two ways to run it
+### Three ways to run it
 
 **`voiddire watch` — works with everything, stops nothing**
 
@@ -235,6 +235,22 @@ them, and there's no plugin to keep updated as each one changes.
 
 The trade-off: it watches, it can't refuse. It tells you after the fact.
 
+**The Claude Code hook — refuses, and this is the one most people can use**
+
+```bash
+voiddire claude
+```
+
+That's it. No service to start, nothing running in the background, no key. It
+registers itself on the moment *before* a file is written, and if a binding
+rule fires the write is **denied** — the AI is handed the card as the reason it
+was refused, and told the one thing to do about it.
+
+It also puts the rules into the AI's instructions before it starts. That half
+matters more than it looks, and our own numbers say so: being blocked costs a
+whole turn while the model works out what happened, but being *told* costs one
+sentence and it just does it right.
+
 **The opencode plugin — refuses**
 
 ```bash
@@ -242,13 +258,16 @@ voiddire opencode
 voiddire serve
 ```
 
-This one hooks the moment before a file is saved and **throws**, which cancels
-the save. The bytes never reach the disk, and the explanation goes back to the
-AI as the error.
+This one hooks the same moment and **throws**, which cancels the save. The
+bytes never reach the disk, and the explanation goes back to the AI as the
+error.
 
-It **fails open**: if our service is down or slow, the write goes through. A
-memory layer that can freeze your agent by being broken is worse than no memory
-layer.
+Both build the same card from the same code, and a test asserts they stay
+identical — an AI shouldn't be able to tell which tool refused it.
+
+Both **fail open**: if anything at all goes wrong — our service is down, the
+rules file is missing, our own code crashes — the write goes through. A memory
+layer that can freeze your agent by being broken is worse than no memory layer.
 
 ### Telling the agent before it acts
 

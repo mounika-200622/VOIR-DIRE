@@ -13,8 +13,12 @@ Five minutes, once.
 ```bash
 cd voiddire
 pip install -e .
-python -m pytest -q                  # 239 passed
+python -m pytest -q                  # 281 passed, 9 skipped
 ```
+
+The nine skips are environment-dependent — no model reachable, no `sleeper`
+sibling installed, no opencode runtime — and they skip rather than fail on
+purpose. If anything **fails**, stop and fix it; do not present over a red run.
 
 Then make sure the two surfaces both come up:
 
@@ -30,14 +34,29 @@ its shell.
 data file that is absent, along with the command that produces it:
 
 ```
-  docket: 6 cases, 4 binding, 2 advisory, 0 overruled
+  docket: 14 cases, 6 binding, 8 advisory, 0 overruled
 
+  http://127.0.0.1:8850/index.html      the front door: everything below, in one list
   http://127.0.0.1:8850/desk.html       the desk: live, or the recorded session
   http://127.0.0.1:8850/cabinet.html    the docket, and every case file in it
   http://127.0.0.1:8850/chart.html      the evidence: does it help, and where does it hurt
   http://127.0.0.1:8850/tape.html       three hundred runs, replayed
   http://127.0.0.1:8850/overruled.html  how a rule loses its authority
 ```
+
+**Read that first line before you present.** `board` re-freezes `web/data.json`
+from whichever ledger it finds, and they are not equally good: a docket of pack
+rules carries almost no empanelment receipts, and the receipt is the one thing
+in this project nobody else has. If it comes back thin — lots of rules, almost
+no receipts — point it at a benchmark ledger instead:
+
+```bash
+python -m voiddire board --ledger .bench/C/3/ledger.db
+```
+
+The committed `web/data.json` already has six receipts in it, so the safe move
+before a demo is to check `git status web/` and throw away a re-freeze you did
+not want.
 
 If it prints a `missing` block, run the command it names before you present.
 
@@ -166,6 +185,57 @@ voiddire init                      # mine their git history for rules
 `init` is worth running on a real repo in front of them, because it is also
 willing to find nothing — on a history with no habit strong enough to be a rule
 it says so rather than inventing one.
+
+---
+
+## Inside Claude Code — do this one live
+
+This is the strongest ninety seconds you have after the race, because it
+happens in the tool the room already uses, on a repository you make in front of
+them, with nothing seeded.
+
+```bash
+mkdir demo && cd demo && git init -q
+mkdir -p models migrations
+printf 'FIELDS = ["id","name"]\n'          > models/patient.py
+printf 'CREATE TABLE patients(id INT);\n'  > migrations/001_init.sql
+git add -A && git commit -qm seed
+
+voiddire rule "models/*.py needs migrations/"
+voiddire claude
+git add .claude && git commit -qm "install voiddire"
+```
+
+Say the setup out loud, because the absence is the point: **no service, no
+daemon, no key, no model.** Then open Claude Code in that directory and ask it
+to add a field to the patient model.
+
+The write is **denied before the bytes land**, and the model is handed this:
+
+```
+BLOCKED BY VOID DIRE - this exact change failed here before.
+
+  Holding No 1, established 12 Sep 2026. Changing models/*.py means changing migrations/ too.
+  Rule:   co_change( models/*.py -> migrations/** )
+  Reason: models/patient.py changed, nothing under migrations/** did
+  Tested: not empanelled - you wrote this rule yourself.
+  DO THIS NEXT: create migrations/002_patient.sql
+```
+
+Three things to point at, in this order:
+
+1. **`002_patient.sql`** — not a template. It read the repo's own migration
+   naming off `001_init.sql` and produced the next one in the sequence.
+2. **`Tested: not empanelled - you wrote this rule yourself.`** — it will not
+   claim evidence it does not have. Contrast it with a benchmark rule in the
+   cabinet reading `1/1 fire, 0/5 false positives`.
+3. Let the agent write the migration, then watch the same edit **go straight
+   through**. A gate that only ever says no is a gate nobody keeps.
+
+If someone asks what happens when it breaks: delete `.voiddire/ledger.db` and
+try again. The write succeeds. Every failure path — no ledger, bad payload,
+unreachable service, an outright crash — allows the write, because a memory
+layer that can wedge your agent by being broken is worse than not having one.
 
 ---
 
