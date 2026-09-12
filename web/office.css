@@ -1,8 +1,15 @@
-/* The records office — shared shell.
+/* The records office — the front door's shell.
  *
- * Tokens are copied verbatim from voiddire/art/clerk.py so the interface and
- * the sprites can never drift apart. If a colour changes there, change it here
- * and nowhere else.
+ * These are NOT the sprite palette, and the comment here used to claim they
+ * were. There are two colour worlds in this building and they are different on
+ * purpose: index.html is the dark entrance hall, while the rooms behind it -
+ * the desk, the cabinet - are the warm daylit office the sprites are drawn in.
+ *
+ * The sprite palette lives in voiddire/art/clerk.py, where shades and
+ * highlights are computed off each base rather than picked, and the room pages
+ * carry those values inline. If a colour changes there, the pages that mirror
+ * it are desk.html, cabinet.html, chart.html, tape.html, overruled.html and
+ * demo.html - not this file.
  */
 
 :root{
