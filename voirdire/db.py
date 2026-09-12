@@ -60,8 +60,8 @@ CREATE INDEX IF NOT EXISTS ix_citations_holding ON citations(holding_id);
 
 def ledger_path(ward: Path, glob: bool = False) -> Path:
     if glob:
-        return Path.home() / ".precedent" / "global.db"
-    return Path(ward) / ".precedent" / "ledger.db"
+        return Path.home() / ".voirdire" / "global.db"
+    return Path(ward) / ".voirdire" / "ledger.db"
 
 
 class Ledger:

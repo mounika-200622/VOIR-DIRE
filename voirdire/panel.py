@@ -13,15 +13,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field, asdict
-from pathlib import Path
-
 from .claim import Claim
 from .db import Ledger
 from . import nextstep, templates
 
 CLEAR, NOTE, HALT, SKIP = "clear", "note", "halt", "skip"
 
-# The grouping a person reads, rather than the template name a machine needs.
 # The grouping a clerk reads, rather than the rule name a machine needs.
 DOMAIN = {
     "needs_evidence": "evidence",
@@ -69,8 +66,9 @@ class Sitting:
 
 
 def sit(led: Ledger, ward: str, ch: Claim, borrowed: list[dict] | None = None) -> Sitting:
-    """Put the change in front of every rule and record what each one says."""
-    out = Sitting(touched=list(ch.touched), at=time.time())
+    """Put the closure in front of every rule and record what each one says."""
+    out = Sitting(touched=[x for x in (ch.asset, f"complaint {ch.id}") if x],
+                  at=time.time())
     holdings = list(led.holdings(ward=ward)) + list(borrowed or [])
 
     for h in holdings:
@@ -88,11 +86,11 @@ def sit(led: Ledger, ward: str, ch: Claim, borrowed: list[dict] | None = None) -
                     domain=DOMAIN.get(h["template"], "other"),
                     says=h["says"], status=h["status"], verdict=verdict,
                     reason=reason or "", took_ms=took)
-        if verdict == HALT:
-            seat.next = nextstep.suggest(
-                type("V", (), {"template": h["template"],
-                               "rule": templates.render(h["template"], h["params"])})(),
-                Path(ward), ch.touched)
+        if verdict in (HALT, NOTE):
+            # Advice that does not say what to do is a refusal with more words,
+            # and that is as true of the tier that cannot block as of the one
+            # that can.
+            seat.next = nextstep.suggest(h["template"], h["params"], ch) or ""
         out.seats.append(seat)
 
     order = {HALT: 0, NOTE: 1, SKIP: 2, CLEAR: 3}

@@ -20,11 +20,25 @@ the reason a tool that refuses things does not get uninstalled in week two.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .claim import Claim
 from .db import Ledger
 from . import history, templates
+
+
+def _origin_id(case: dict) -> int:
+    """Which complaint this case was filed about.
+
+    file_case() writes it into `detail` as JSON. It is not a column because a
+    case in the code version of this system points at files, not at a row - and
+    the ledger schema is shared with that one deliberately.
+    """
+    try:
+        return int(json.loads(case.get("detail") or "{}").get("complaint_id") or 0)
+    except (ValueError, TypeError):
+        return 0
 
 
 def empanel(led: Ledger, ward: str, template: str, params: dict,
@@ -74,7 +88,7 @@ def reconsider(led: Ledger, ward: str) -> list[int]:
         case = led.case(h["case_id"])
         if not case:
             continue
-        origin = Claim.one(Path(ward), int(case.get("complaint_id") or 0))
+        origin = Claim.one(Path(ward), _origin_id(case))
         if origin is None:
             continue
         status, receipt = empanel(led, ward, h["template"], h["params"], origin)

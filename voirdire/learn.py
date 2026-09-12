@@ -13,6 +13,7 @@ with using the same records.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from .claim import Claim
@@ -82,7 +83,7 @@ def file_case(led: Ledger, ward: Path, claim: Claim) -> list[dict]:
     case_id = led.file_case(
         run_id, scope, "reopened", "high",
         f"complaint {claim.id} was closed, then reported again",
-        [claim.asset], f'{{"complaint_id": {claim.id}}}')
+        [claim.asset], json.dumps({"complaint_id": claim.id}))
 
     for template, params, says in propose(ward, claim):
         status, receipt = empanel.empanel(led, scope, template, params, claim)
