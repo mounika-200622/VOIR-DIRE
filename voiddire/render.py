@@ -26,6 +26,42 @@ def _row(text: str, code: str = "", pad: int = 2) -> str:
     return f"{_c('|', VER)}{_c(body, code) if code else body}{fill}{_c('|', VER)}"
 
 
+def agent_card(verdicts: list[dict]) -> str:
+    """The halt card as a *model* reads it, arriving as a tool error.
+
+    halt_card below is 74 columns of box-drawing for a person at a terminal.
+    An agent gets this instead: no colour, no box, no width to wrap against -
+    just the holding, why it fired, the receipt that earned it the right to
+    fire, and the one action that clears it.
+
+    Kept identical to the card the opencode plugin builds, because an agent
+    should not be able to tell which harness refused it. A test asserts that.
+    """
+    lines = ["BLOCKED BY VOID DIRE - this exact change failed here before."]
+    for v in verdicts:
+        e = v.get("empanel") or {}
+        lines.append("")
+        lines.append(f"  Holding No {v.get('n')}, established {v.get('when')}. {v.get('says')}")
+        lines.append(f"  Rule:   {v.get('rule')}")
+        lines.append(f"  Reason: {v.get('reason')}")
+        # Three provenances, and they must not read as one. A rule replayed
+        # against history has earned something a rule you typed has not, and
+        # flattening them would claim evidence that was never gathered.
+        if e.get("tested"):
+            lines.append(f"  Tested: {e.get('fire')} fire, {e.get('false')} false positives.")
+        elif e.get("taught"):
+            lines.append("  Tested: not empanelled - you wrote this rule yourself.")
+        elif e.get("mined"):
+            lines.append("  Tested: mined from this repo's history, not empanelled.")
+        # A verdict tells the agent it is wrong; an instruction tells it what to
+        # do. Without this a small model retries the same edit and stalls.
+        if v.get("next"):
+            lines.append(f"  DO THIS NEXT: {v['next']}")
+    lines.append("")
+    lines.append("Do the work named above in the same change, then try again.")
+    return chr(10).join(lines)
+
+
 def halt_card(v, number: int | None = None, repo=None,
               touched: list[str] | None = None) -> str:
     n = number if number is not None else v.holding_id

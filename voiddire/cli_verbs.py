@@ -172,6 +172,27 @@ def cmd_opencode(a) -> int:
     return 0
 
 
+def cmd_claude(a) -> int:
+    out = verbs.claude(Path(a.path), a.mode)
+    print(f"  installed {out['hook']}")
+    print(f"  configured {out['config']}")
+    print()
+    if a.mode != "enforce":
+        print(f"  mode {a.mode}: {MODES[a.mode]}")
+        print(f"    VOIDDIRE_MODE={a.mode} claude")
+    else:
+        print("  Claude Code will now refuse a write that fires a binding")
+        print("  holding, before the bytes land, and hand the card back to the")
+        print("  model as the reason it was denied. No service to start.")
+    print()
+    # self_disarm is binding on .claude/**, and an uncommitted file counts as a
+    # change - so a fresh install trips its own rule on the very next write
+    # until these are in git. Better to say so than to let it look like a bug.
+    print("  commit the install, or the gate fires on its own files:")
+    print("    git add .claude && git commit -m \"install voiddire\"")
+    return 0
+
+
 def register(sub) -> None:
     i = sub.add_parser("init", help="learn this repo's habits from its own history")
     i.add_argument("--no-pack", action="store_true",
@@ -217,3 +238,8 @@ def register(sub) -> None:
     oc.add_argument("path", nargs="?", default=".")
     oc.add_argument("--mode", choices=sorted(MODES), default="enforce")
     oc.set_defaults(fn=cmd_opencode)
+
+    cc = sub.add_parser("claude", help="install the Claude Code hook that stops a write")
+    cc.add_argument("path", nargs="?", default=".")
+    cc.add_argument("--mode", choices=sorted(MODES), default="enforce")
+    cc.set_defaults(fn=cmd_claude)

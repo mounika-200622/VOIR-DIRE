@@ -44,7 +44,8 @@ RULES: list[dict] = [
     # silently became a bare agent still printing numbers that looked like
     # results.
     dict(key="self_disarm", template="forbidden_edit", binding=True,
-         params={"glob": "{.voiddire/**,.git/hooks/**,**/.opencode/plugins/**,opencode.json}"},
+         params={"glob": "{.voiddire/**,.git/hooks/**,**/.opencode/plugins/**,opencode.json,"
+                         ".claude/settings.json,.claude/settings.local.json,.claude/hooks/**}"},
          says="This turns the gate off. Change it yourself, not through the agent."),
     dict(key="disarm_ci", template="forbidden_edit", binding=True,
          params={"glob": "{.github/workflows/**,.pre-commit-config.yaml}"},

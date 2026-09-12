@@ -52,8 +52,13 @@ splits on certainty, not on severity.**
   exceptions). It never refuses because it crashed, and the opencode plugin
   never stalls the agent because the service is slow or down.
 - **`self_disarm` stays binding.** The agent is not allowed to edit
-  `.voiddire/`, `.git/hooks/`, `.opencode/plugins/`, or its own permissions
-  config. This has actually happened here twice — once an
+  `.voiddire/`, `.git/hooks/`, `.opencode/plugins/`, `.claude/settings.json`,
+  `.claude/hooks/`, or its own permissions config. A freshly installed hook is
+  an *untracked* file, and `Change.from_git` counts those — so the rule fires
+  on its own install until it is committed. That is why `voiddire claude`
+  prints the `git add .claude` line; do not silence it by adding `.claude/**`
+  to `change.IGNORED`, which would blind the gate to the disarm it exists to
+  catch. This has actually happened here twice — once an
   agent wrote outside its own worktree into the seed corpus, once a plugin
   file went missing and every benchmark arm silently became a bare agent
   still printing numbers that looked like results.
@@ -106,8 +111,23 @@ Ledger(db.ledger_path(repo))                     # <repo>/.voiddire/ledger.db
 ```
 
 **The ledger is the only integration point.** The CLI, the opencode plugin,
-the board, and the benchmark all read it. Nothing calls anything else's
-internals directly.
+the Claude Code hook, the board, and the benchmark all read it. Nothing calls
+anything else's internals directly.
+
+### The two harnesses that actually refuse
+
+Both go through the same `serve.gate_check(repo, pending)` — a pure function
+of those two arguments, which is why the hook needs no running service and
+falls back in-process when `voiddire serve` is not up. Both render the halt
+card from `render.agent_card`, and `tests/test_claude_hook.py` asserts the two
+stay byte-identical: an agent must not be able to tell which harness refused
+it. Both are ASCII-only on purpose — the card reaches a Windows console via
+stderr, and an unencodable character there would make the hook fail *open*.
+
+```
+plugin/voiddire.ts      opencode      throws in tool.execute.before
+voiddire/claude_hook.py Claude Code   PreToolUse denies; UserPromptSubmit briefs
+```
 
 ## 5. What it checks
 

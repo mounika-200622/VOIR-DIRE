@@ -15,8 +15,8 @@ Autopsy tells the agent about the crash. Void Dire takes the keys.
 - **Honest**: it publishes where it makes agents *worse*, and the 9 tasks it broke
 - **Free**: Python and the standard library. One SQLite file. No Docker, no
   Postgres, no embedding API, no key required for any part of it
-- **Any agent**: reads git, not the agent — opencode, Cursor, Claude Code, or a
-  person typing by hand
+- **Any agent**: blocks inside **Claude Code** and opencode; reads git, not the
+  agent, so Cursor and a person typing by hand get the same treatment
 
 ---
 
@@ -78,6 +78,7 @@ voiddire gate .                                # exits 1 if a rule fires
 voiddire off 4                                 # this rule is wrong
 voiddire status                                # what it caught this week
 voiddire hook                                  # git pre-commit hook
+voiddire claude                                # block writes inside Claude Code
 voiddire watch                                 # live, with any agent
 ```
 
@@ -135,7 +136,43 @@ uninstalled, and everything it ever learned goes with it.
 
 ## Stop the write before it lands
 
-`watch` reports; it cannot refuse. For that there is the opencode plugin:
+`watch` reports; it cannot refuse. Two integrations actually refuse.
+
+### Claude Code
+
+```bash
+voiddire claude                    # installs the hook into .claude/
+git add .claude && git commit -m "install voiddire"
+```
+
+That is the whole setup — **no service to start, no daemon, no key.** It
+registers a `PreToolUse` hook that sees `Write`, `Edit`, `MultiEdit` and
+`NotebookEdit` *before* the bytes reach the disk, and denies the call if a
+binding holding fires. The card goes back to the model as the reason it was
+refused:
+
+```
+BLOCKED BY VOID DIRE - this exact change failed here before.
+
+  Holding No 1, established 12 Sep 2026. Changing models/*.py means changing migrations/ too.
+  Rule:   co_change( models/*.py -> migrations/** )
+  Reason: models/patient.py changed, nothing under migrations/** did
+  Tested: 1/1 fire, 0/5 false positives.
+  DO THIS NEXT: create migrations/002_patient.sql
+```
+
+It also registers `UserPromptSubmit`, which puts the rules in front of the
+model *before* it starts. That half matters more than it looks: being blocked
+costs a whole turn and the model has to work out why; being told costs a
+sentence and it complies the first time. Our own compliance sweep says the gate
+is not the mechanism — the instruction is.
+
+If `voiddire serve` happens to be running it will use it, so the desk page
+lights up as decisions happen; if not, it answers in-process. Either way the
+verdict is identical, and **every failure path allows the write** — no ledger,
+bad payload, unreachable service, or an outright crash all mean *allow*.
+
+### opencode
 
 ```bash
 voiddire opencode          # installs into .opencode/plugins/
@@ -147,6 +184,10 @@ It throws in `tool.execute.before`, which aborts the tool call **before the
 bytes reach the disk**, and the halt card goes back to the model as the tool's
 error. It fails open on a timeout: a memory layer that can stall your agent by
 being down is worse than no memory layer.
+
+Both surfaces build the same card from the same `gate.evaluate`, and a test
+asserts they stay byte-identical — an agent should not be able to tell which
+harness refused it.
 
 Three modes, and they are the three arms of the benchmark:
 
@@ -448,7 +489,8 @@ takes the keys.*
 | `voiddire off <n>` / `on <n>` | mute a rule without deleting its case |
 | `voiddire status` | what it caught this week, and what it let through |
 | `voiddire hook` | install the git pre-commit hook |
-| `voiddire opencode` | install the plugin that stops a write |
+| `voiddire claude` | install the Claude Code hook that stops a write |
+| `voiddire opencode` | install the opencode plugin that stops a write |
 | `voiddire watch` | live decisions, any agent, any editor |
 | `voiddire serve` | the HTTP face the plugin talks to |
 | `voiddire docket` | list the cases and what they established |

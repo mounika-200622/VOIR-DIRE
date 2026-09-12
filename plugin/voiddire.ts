@@ -76,14 +76,21 @@ const pendingPaths = (tool: string, args: Record<string, unknown>): string[] => 
 // thing that is missing — a warning the agent cannot skim past, because it
 // arrives as the failure of the call it just tried to make.
 const card = (verdicts: Verdict[]): string => {
-  const lines = ["BLOCKED BY VOID DIRE — this exact change failed here before."]
+  // ASCII on purpose: the same card goes to stderr from the Claude Code hook,
+  // and an em dash there dies on a cp1252 console - which would fail the write
+  // OPEN rather than blocking it. render.agent_card must stay byte-identical.
+  const lines = ["BLOCKED BY VOID DIRE - this exact change failed here before."]
   for (const v of verdicts) {
     lines.push("")
     lines.push(`  Holding No ${v.n}, established ${v.when}. ${v.says}`)
     lines.push(`  Rule:   ${v.rule}`)
     lines.push(`  Reason: ${v.reason}`)
+    // Three provenances, and they must not read as one. A rule replayed against
+    // history has earned something a rule you typed has not.
     const e = (v.empanel ?? {}) as Record<string, string>
-    if (e.fire) lines.push(`  Tested: ${e.fire} fire, ${e["false"]} false positives.`)
+    if (e.tested) lines.push(`  Tested: ${e.fire} fire, ${e["false"]} false positives.`)
+    else if (e.taught) lines.push("  Tested: not empanelled - you wrote this rule yourself.")
+    else if (e.mined) lines.push("  Tested: mined from this repo's history, not empanelled.")
     // A verdict tells the agent it is wrong; an instruction tells it what to do.
     // Without this a small model retries the same edit and stalls.
     if (v.next) lines.push(`  DO THIS NEXT: ${v.next}`)

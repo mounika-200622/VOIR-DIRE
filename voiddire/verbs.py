@@ -328,3 +328,79 @@ def opencode(repo: Path, mode: str = "enforce") -> dict:
     cfg_path.write_text(_json.dumps(cfg, indent=2) + chr(10), encoding="utf-8")
 
     return {"plugin": dest, "config": cfg_path, "mode": mode}
+
+
+# ---------------------------------------------------------- claude code -------
+
+# Shipped as a constant rather than a file so there is nothing to package and
+# nothing to go missing. It swallows its own import error: a repository whose
+# hooks outlive the install should be silent, not broken.
+CLAUDE_HOOK = (
+    "import sys\n"
+    "# installed by `voiddire claude`\n"
+    "try:\n"
+    "    from voiddire import claude_hook\n"
+    "except Exception:\n"
+    "    sys.exit(0)\n"
+    "sys.exit(claude_hook.main(sys.argv[1:]))\n"
+)
+
+MARK = "voiddire_gate.py"          # identity for an idempotent merge
+MATCHER = {"PreToolUse": "Write|Edit|MultiEdit|NotebookEdit",
+           "UserPromptSubmit": ""}
+
+
+def _merge_hook(cfg: dict, event: str, command: str) -> None:
+    """Register one hook without trampling anything already there.
+
+    Purge-then-append keyed on MARK, so re-running with a different --mode
+    replaces our entry rather than stacking a second one, and a repository that
+    already runs its own formatter on PostToolUse keeps it.
+    """
+    groups = cfg.setdefault("hooks", {}).setdefault(event, [])
+    for g in groups:
+        g["hooks"] = [h for h in g.get("hooks", [])
+                      if MARK not in str(h.get("command", ""))]
+    groups[:] = [g for g in groups if g.get("hooks")]
+
+    want = MATCHER[event]
+    g = next((g for g in groups if g.get("matcher", "") == want), None)
+    if g is None:
+        g = {"matcher": want, "hooks": []}
+        groups.append(g)
+    g["hooks"].append({"type": "command", "command": command, "timeout": 5})
+
+
+def claude(repo: Path, mode: str = "enforce") -> dict:
+    """Install the hook so Claude Code actually stops a write.
+
+    Same enforcement as the opencode plugin, in the harness most people are
+    using. PreToolUse denies the write before the bytes land and hands back the
+    card; UserPromptSubmit puts the rules in front of the model before it starts,
+    which is the half that costs a sentence instead of a whole turn.
+    """
+    import json as _json
+    import sys as _sys
+
+    repo = Path(repo).resolve()
+    hooks_dir = repo / ".claude" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    shim = hooks_dir / MARK
+    shim.write_text(CLAUDE_HOOK, encoding="utf-8")
+
+    cfg_path = repo / ".claude" / "settings.json"
+    cfg: dict = {}
+    if cfg_path.is_file():
+        try:
+            cfg = _json.loads(cfg_path.read_text(encoding="utf-8"))
+        except ValueError:
+            cfg = {}
+
+    for event in MATCHER:
+        cmd = (f'"{_sys.executable}" '
+               f'"${{CLAUDE_PROJECT_DIR}}/.claude/hooks/{MARK}" '
+               f'--event {event} --mode {mode}')
+        _merge_hook(cfg, event, cmd)
+
+    cfg_path.write_text(_json.dumps(cfg, indent=2) + chr(10), encoding="utf-8")
+    return {"hook": shim, "config": cfg_path, "mode": mode}
