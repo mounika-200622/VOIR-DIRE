@@ -74,6 +74,7 @@ def dump(ledger: Path | None = None) -> dict:
 # data still renders - it says what is missing instead of drawing nothing -
 # but the person serving it should be told before a judge is.
 PAGES = [
+    ("index.html",     "the front door: everything below, in one list"),
     ("desk.html",      "the desk: live, or the recorded session"),
     ("cabinet.html",   "the docket, and every case file in it"),
     ("chart.html",     "the evidence: does it help, and where does it hurt"),

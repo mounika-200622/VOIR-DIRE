@@ -152,7 +152,7 @@ for the full table. The two structural facts worth repeating here:
 
 ## 6. Current state
 
-`python -m pytest -q` → **247 collected**, green aside from
+`python -m pytest -q` → **290 collected**, green aside from
 environment-dependent skips (no reachable model, no `sleeper` sibling
 installed, no opencode runtime for the live-harness tests — all skip cleanly
 rather than failing). The benchmark, the opencode plugin, the office UI

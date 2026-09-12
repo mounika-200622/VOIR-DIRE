@@ -224,10 +224,11 @@ $ voiddire gate .
 voiddire board
 ```
 
-Five pages, static, no build step, and every one renders with nothing running.
+Six pages, static, no build step, and every one renders with nothing running.
 
 | | |
 |---|---|
+| **the front door** | every page below, in one list, and it says where the race is instead of linking a page that cannot work without a server |
 | **the desk** | live while `voiddire watch` runs; otherwise it plays a **recorded** session, labelled as a replay. Not an animation — a real capture of the watcher |
 | **the docket** | every case on file. Click a folder in the drawer to open its file: the holding, the receipt, the facts, the citations, its overruling standing |
 | **the evidence** | the result first, then the compliance curve including the zone where the tool makes agents *worse*, then the caveats |
@@ -329,8 +330,14 @@ void dire is enforced.
 | runs stopped, that passed anyway | — | **54 of 58** |
 | regressions vs arm A | — | **9** |
 
+**That table was measured on the 30-task suite, and the suite now has 41.** So
+running the benchmark today reproduces the 410-run numbers below, not these.
+Both reports are committed — `bench/report.json` is the run above,
+`bench/report.coverage.json` the current one — and the figures here are left as
+they were measured rather than quietly restated against a corpus they never saw.
+
 ```bash
-python -m voiddire bench --arms A,C --seeds 1,2,3,4,5
+python -m voiddire bench --arms A,C --seeds 1,2,3,4,5 --out bench/report.coverage.json
 ```
 
 ### Every trap class moved
@@ -592,7 +599,7 @@ takes the keys.*
 | `voiddire docket` | list the cases and what they established |
 | `voiddire reject "..."` | file a rejection against the working tree |
 | `voiddire sweep` | re-decide every binding holding from its citations |
-| `voiddire board` | freeze the ledger and serve the five pages |
+| `voiddire board` | freeze the ledger and serve the board |
 | `voiddire demo` | the split screen: two apps, one clock |
 | `voiddire bench` | run the arms, write `bench/report.json` |
 | `voiddire live` | the three arms driven by real opencode |
@@ -636,7 +643,7 @@ export VOIDDIRE_API_KEY=...    # optional
 
 With no model reachable the deterministic fallback takes over.
 
-**6,411 lines of Python. 247 tests.**
+**7,000 lines of Python. 290 tests.**
 
 ```bash
 python -m pytest -q
