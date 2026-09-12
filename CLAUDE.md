@@ -28,8 +28,18 @@ against the repository's own history and must pass two tests:
    have blocked work that already shipped is a rule that wastes the next
    agent's turn for nothing.
 
-Fail either → demoted to **persuasive** (prose in the prompt, cannot block).
-Pass both → **binding**, and the receipt is printed publicly:
+There is a third way to fail, and it is the one that actually caught us out:
+**a rule nothing could test does not bind either.** A check whose evidence is
+missing from a stored run abstains, and `fires()` returns `None` for an
+abstention exactly as it does for approval. Counting those as silence is how
+`must_run` once went binding on an empty proof and then refused a task that
+only edited a README. So `empanel` counts `judged` beside `tested`, asks
+`templates.can_judge` before believing a replay, and refuses to promote
+anything no past run was capable of contradicting. **A check that abstains and
+a check that approves look identical from outside; only one is evidence.**
+
+Fail any → demoted to **persuasive** (prose in the prompt, cannot block).
+Pass → **binding**, and the receipt is printed publicly:
 
 ```
 BINDING   co_change( models/*.py -> migrations/** )

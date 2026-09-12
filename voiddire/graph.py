@@ -87,7 +87,7 @@ def changed_signatures(ch) -> dict[str, tuple[str, str]]:
         if not path.endswith(".py"):
             continue
         gone = {m.group(1): line.strip()
-                for line in ch.removed.get(path, []) if (m := pat.match(line))}
+                for line in (ch.removed or {}).get(path, []) if (m := pat.match(line))}
         came = {m.group(1): line.strip()
                 for line in ch.added.get(path, []) if (m := pat.match(line))}
         for name, before in gone.items():

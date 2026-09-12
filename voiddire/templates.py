@@ -77,7 +77,7 @@ def must_not_remove(ch: Change, p: dict) -> str | None:
     """Deleting the thing that was failing is the oldest trick there is."""
     rx = re.compile(p["regex"])
     for path in _hits(ch.touched, p["glob"]):
-        for line in ch.removed.get(path, []):
+        for line in (ch.removed or {}).get(path, []):
             if rx.search(line):
                 return f"{path} deletes a line matching /{p['regex']}/"
     return None
@@ -341,6 +341,56 @@ def render(template: str, p: dict) -> str:
 
 def valid(template: str, p: dict) -> bool:
     return template in TEMPLATES and all(p.get(k) for k in REQUIRED_PARAMS[template])
+
+
+# Which checks can actually reach a verdict on a given change, and which are
+# only silent because the evidence they need is missing.
+#
+# `fires()` returns None for both, and it has to: every caller treats None as
+# "nothing to say" and blocking on an abstention would fire on everything. But
+# empanelment must tell them apart. A rule replayed against past runs that all
+# abstained has not been tested against anything - it is unfalsifiable, not
+# innocent - and promoting it is how a false positive gets the authority to
+# block. So the distinction lives here, as a separate question, and nothing
+# about the gate's behaviour changes.
+def _judges_commands(ch: Change, p: dict) -> bool:
+    return ch.commands is not None
+
+
+def _judges_removals(ch: Change, p: dict) -> bool:
+    return ch.removed is not None
+
+
+def _judges_forge(ch: Change, p: dict) -> bool:
+    from . import packs
+    return packs.forge_home() is not None
+
+
+def _judges_sleeper(ch: Change, p: dict) -> bool:
+    from . import packs
+    return packs.sleeper_home() is not None
+
+
+# Only checks that ABSTAIN on missing evidence belong here. `required_command`,
+# `must_appear`, `no_quadratic` and `regression_test` do reach a verdict on a
+# replayed run - but they reach it by reading the working tree as it is *now*
+# (ch.text, ch.run), not as it was then. That is a real and separate weakness,
+# documented rather than half-fixed here: papering over it with an abstention
+# would stop those rules ever binding.
+JUDGEABLE: dict[str, Callable[[Change, dict], bool]] = {
+    "must_run": _judges_commands,
+    "must_not_remove": _judges_removals,
+    "blast_radius": _judges_removals,
+    "forge_gate": _judges_forge,
+    "sleeper_gate": _judges_sleeper,
+}
+
+
+def can_judge(template: str, p: dict, ch: Change) -> bool:
+    """Could this check reach a verdict on this change at all?"""
+    if not valid(template, p):
+        return False
+    return JUDGEABLE.get(template, lambda _c, _p: True)(ch, p)
 
 
 def fires(template: str, p: dict, ch: Change) -> str | None:

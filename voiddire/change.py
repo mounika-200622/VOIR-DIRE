@@ -23,7 +23,10 @@ class Change:
     repo: Path
     touched: list[str] = field(default_factory=list)          # repo-relative, forward slashes
     added: dict[str, list[str]] = field(default_factory=dict)    # path -> added lines
-    removed: dict[str, list[str]] = field(default_factory=dict)  # path -> removed lines
+    # None means "not observable", exactly as `commands` does. Only a v1
+    # artifact replayed by empanelment carries that; a live Change always
+    # observes removals, and {} truthfully means "looked, found none".
+    removed: dict[str, list[str]] | None = field(default_factory=dict)  # path -> removed lines
     commands: list[str] | None = None   # None means "we could not see them"
 
     def text(self, path: str) -> str:

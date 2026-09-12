@@ -424,12 +424,33 @@ memory"* is the finding, and it stands on its own.
 it, six on `plugin_without_declaration`. A result showing the tool never hurts
 would be the less trustworthy one.
 
-**4. A live false positive.** Testing against a real model surfaced one the
-synthetic benchmark never could: `must_run( client/*.py : tools/gen.py )` fired
-on a control task that only edited a README. Empanelment did not catch it
-because no past successful run had ever edited `docs/` alone, so the
-false-positive test passed vacuously — **it can only refute a rule with evidence
-it has.**
+**4. A live false positive — found, root-caused, fixed.** Testing against a real
+model surfaced one the synthetic benchmark never could:
+`must_run( client/*.py : tools/gen.py )` fired on a control task that only
+edited a README.
+
+We first wrote this off as bad luck — no past successful run had happened to
+edit `docs/` alone, so the false-positive test passed vacuously. That was
+wrong, and the truth was worse. Stored run artifacts recorded only `touched`
+and `added`, never the commands a run issued. `must_run` asks whether a
+generator ran, so on every single replay it **abstained** — and an abstention
+is indistinguishable from silence. Its false-positive count was empty *by
+construction*. The rule was not under-tested; it was **unfalsifiable**, and it
+bound on a proof that could never have existed.
+
+Three changes, and a rule like it cannot bind that way again:
+
+- artifacts persist `commands` and `removed`, so a past run can actually
+  contradict a command-aware rule;
+- empanelment counts `judged` separately from `tested` and **refuses to bind
+  anything no past run was able to test** — the receipt now says
+  *"none of 5 past runs could test this rule"* instead of a confident `0/5`;
+- the rule names the one file whose own header declared it generated, rather
+  than the whole directory around it.
+
+The reproduction is `tests/test_empanel.py`. This is the general lesson and it
+cost us a published caveat to learn: **a check that abstains and a check that
+approves look identical from the outside, and only one of them is evidence.**
 
 **5. `blast_radius` and `no_quadratic` are unmeasured.** Both are real checks;
 neither has a trap class in the benchmark, so there is no number for them.

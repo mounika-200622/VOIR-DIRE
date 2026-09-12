@@ -76,3 +76,36 @@ def test_must_run_abstains_when_commands_are_invisible():
     p = {"glob": "client/*.py", "cmd": "tools/gen.py"}
     unknown = Change(repo=Path("."), touched=["client/generated.py"], commands=None)
     assert templates.fires("must_run", p, unknown) is None
+
+
+def test_can_judge_separates_an_abstention_from_a_silence():
+    """fires() returns None for both, and must - every caller treats None as
+    'nothing to say', and blocking on an abstention would fire on everything.
+    Empanelment is the one place that has to tell them apart."""
+    p = {"glob": "client/*.py", "cmd": "tools/gen.py"}
+    unknown = Change(repo=Path("."), touched=["client/generated.py"], commands=None)
+    seen = Change(repo=Path("."), touched=["client/generated.py"],
+                  commands=["python tools/gen.py"])
+
+    assert templates.fires("must_run", p, unknown) is None
+    assert templates.fires("must_run", p, seen) is None
+    assert templates.can_judge("must_run", p, unknown) is False
+    assert templates.can_judge("must_run", p, seen) is True
+
+
+def test_can_judge_is_true_for_a_rule_that_only_needs_paths():
+    """co_change reads ch.touched and nothing else, so any record can test it."""
+    p = {"trigger": "models/*.py", "required": "migrations/**"}
+    bare = Change(repo=Path("."), touched=["models/a.py"], commands=None, removed=None)
+    assert templates.can_judge("co_change", p, bare) is True
+
+
+def test_can_judge_is_false_for_an_incomplete_rule():
+    assert templates.can_judge("must_run", {"glob": "x/*.py"}, Change(repo=Path("."))) is False
+
+
+def test_a_removal_rule_cannot_be_judged_without_removals():
+    p = {"regex": "assert ", "glob": "tests/**"}
+    bare = Change(repo=Path("."), touched=["tests/test_x.py"], removed=None)
+    assert templates.can_judge("must_not_remove", p, bare) is False
+    assert templates.fires("must_not_remove", p, bare) is None

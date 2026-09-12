@@ -14,8 +14,17 @@ def _dir(repo: Path) -> Path:
 
 
 def save(repo: Path, run_id: int, ch: Change) -> None:
+    """Everything a check might need to judge this run later.
+
+    `commands` and `removed` are here because empanelment replays proposed
+    rules against these snapshots, and a check that cannot see what it needs
+    abstains - which silently makes it unfalsifiable rather than merely
+    untested. See empanel.py.
+    """
     (_dir(repo) / f"run_{run_id}.json").write_text(
-        json.dumps({"touched": ch.touched, "added": ch.added}), encoding="utf-8")
+        json.dumps({"v": 2, "touched": ch.touched, "added": ch.added,
+                    "removed": ch.removed, "commands": ch.commands}),
+        encoding="utf-8")
 
 
 def load(repo: Path, run_id: int) -> Change | None:
@@ -23,4 +32,9 @@ def load(repo: Path, run_id: int) -> Change | None:
     if not p.is_file():
         return None
     d = json.loads(p.read_text(encoding="utf-8"))
-    return Change(repo=Path(repo), touched=d["touched"], added=d["added"])
+    # A v1 artifact recorded neither, and the honest reading of that is
+    # "unknown", not "nothing ran" and not "nothing was removed". `.get` with
+    # no default is doing real work here: None is the value that makes a
+    # command-aware check abstain instead of judging on absent evidence.
+    return Change(repo=Path(repo), touched=d["touched"], added=d.get("added", {}),
+                  removed=d.get("removed"), commands=d.get("commands"))

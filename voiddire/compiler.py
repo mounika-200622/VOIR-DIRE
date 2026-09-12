@@ -87,20 +87,16 @@ def fallback(case: dict, ch: Change, past: list[Change] | None = None) -> tuple[
     units = _units(ch.touched)
     # A hand-edited generated file touches exactly the path a regeneration would.
     # No structural rule separates them; whether the generator ran does.
+    #
+    # The rule names the one file whose own header declared it generated, not
+    # _globify'd to its whole directory. The evidence is that file's words, and
+    # widening it to client/*.py is what let this rule fire on a task that had
+    # merely touched something else in the same folder.
     for path in ch.touched:
         gen = _generator_of(ch, path)
         if gen and not any(gen in c for c in (ch.commands or [])):
-            glob = _globify(path)
-            return "must_run", {"glob": glob, "cmd": gen},                 f"{glob} is generated. Run {gen} instead of editing it."
-
-    # A hand-edited generated file touches exactly the path a regeneration would.
-    # No structural rule separates them; whether the generator ran does.
-    for path in ch.touched:
-        gen = _generator_of(ch, path)
-        if gen and not any(gen in c for c in (ch.commands or [])):
-            glob = _globify(path)
-            return "must_run", {"glob": glob, "cmd": gen}, \
-                f"{glob} is generated. Run {gen} instead of editing it."
+            return "must_run", {"glob": path, "cmd": gen}, \
+                f"{path} is generated. Run {gen} instead of editing it."
 
     # Correlation is not direction, and this path cannot fix that.
     #
